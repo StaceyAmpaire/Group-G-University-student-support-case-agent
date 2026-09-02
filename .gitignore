@@ -1,0 +1,15 @@
+# Node dependencies (if using JavaScript/Node)
+node_modules/
+
+# Python virtual environments (if using Python)
+venv/
+.venv/
+__pycache__/
+
+# Environment variables containing private API keys/passwords
+.env
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
