@@ -1,0 +1,7 @@
+In order to streamline your ICT support requests and better serve the Makerere University Community, we utilize a support ticket system. Every support request is assigned a unique ticket number which you can use to track the progress and responses online. For your reference we provide complete archives and history of all your support requests. A valid Makerere University (recommended) email address is required to submit a ticket.
+
+To get started simply click "Open a New Ticket link" button on the right, or check on a previously submitted ticket by clicking "Check Ticket Status".
+
+Email Conflict Issues: Click here to Report your email conflict or visit https://dicts.mak.ac.ug/forms/report-email-conflict
+
+Many of the ICT related issues have also been addressed in our general Knowledge base. You can access it at https://answers.mak.ac.ug. Please take a few seconds to browse our knowledge base and get quick self help.

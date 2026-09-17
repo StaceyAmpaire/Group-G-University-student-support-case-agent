@@ -1,0 +1,36 @@
+Fees & Payment Structure
+Guide on Fees structures and payment
+
+Procedure
+Complete the application process on Institution’s Online Application Portal URL https://apply.mak.ac.ug/
+Obtain a Payment Reference Number (PRN) by clicking on “Pay for Form” Button
+Make a payment at any of the banks used by Uganda Revenue Authority. Click here for instructions on how to pay using VISA/MASTERCARD (Click here for detailed procedure) or follow the steps below for Mobile Money Payments                                        
+MOBILE MONEY PAYMENT STEPS:                                                 
+
+Dial *165# on either MTN or Airtel (Click here for detailed procedure)
+
+For MTN Dial *165#, then select:
+
+Option 4: Payments
+Option 5: Fees and Taxes
+Option 1: URA
+Option 1: With PRN Payments
+Please enter your payment registration number (PRN) then follow prompts.
+Details of Application form will be confirmed 
+Enter your mobile money PIN to confirm payment
+Your status on the portal will change from pending to paid
+Makerere University fees policy 2016
+
+ Payments via Electronic Funds Transfers (EFT)
+EFT Payments should be transferred to Uganda Revenue Authority Collection Account in Bank of Uganda as follows:
+
+Bank Name        :     STANBIC BANK
+Bank Address     :    KAMPALA UGANDA
+Account Name   :    UGANDA REVENUE AUTHORITY E-PAYMENTS
+Account Number    :    9030005762927
+Currency        :    UGANDA SHILLINGS
+Swift Code        :    SBICUGKX
+Use PRN and Makerere university as the descriptions
+
+
+Continuing students are expected to enrol and register on the ACMIS System in order to be given receipts for the money paid. Further clarification on this mode of payment please email the office of the bursar on the emails above.

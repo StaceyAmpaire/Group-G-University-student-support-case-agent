@@ -1,0 +1,111 @@
+Every student admitted to Makerere University will  go through the registration process. The process is in two categories namely college-based registration and self-registration. 
+
+College-based Registration:
+The first type of registration is done by the respective college registrar and is a manual process. At this stage, the student’s details such as date of birth, and nationality are verified manually. The dates for this process are always communicated at the college levels.
+
+Self-registration and Enrolment
+Students must enroll for each academic semester, this is done by an individual through the student portal. 
+
+After enrolling for a semester, a student then registers the different course units to do in the particular semester. This is also done by the individual through their student portal account. 
+
+Self registration has different categories depending upon the candidate’s status. I can be as;
+
+Continuing student: - This option is for the students under normal progress. 
+Doing retakes after final year: - This option caters for students whose program period is done but for some reasons still have retakes to do. Say one is admitted on a four-year course and has not completed within the four years. They will select this option during their registration process. 
+Finalist: - A finalist is a student in their last year of their program period. It could be third year for a three-year program, and fourth year for a four-years program.
+Fresher: - A fresher is a newly admitted student registering for their first semester at campus. 
+Stay put: - The stay put option is for students who have had low academic performance as defined by their respective programs, and have been advised not to proceed to the next academic year. 
+Undergraduate Student Registration (Year one, Semester one)
+The process is affected by the admissions process as the Academic Registrars are mandated to input the relevant information of applicants in their respective schemes that were admitted into the ACMIS System thus creating accounts for them. 
+
+Student Enrollment:
+The process is started by the student who logs onto his account in the ACMIS System, selects courses to be studied for the given year and semester then enrolls for the selected courses. 
+
+Payment of required fees:
+He/she then generates a Payment Reference Number via the system, prints a payment invoice, proceeds to pay. The student then allocates the fees paid as reflected on his account to the different arrears (tuition, functional fees, hall of residence fees). 
+
+Submission of bio-data form and supporting documents:
+The student picks a bio-data form from the school registrar’s office, fills it, attaches an admission letter, birth certificate, O’level results, A’level results, transcripts (for diploma/degree holders), former institution ID, proof of payment and submits the form to the school registrar.
+
+Verification of submitted documents:
+The school registrar then proofreads the submitted form to ensure correlation between the information on the form and that in the ACMIS System. 
+
+Registration of student:
+If no errors are found, the registrar then checks that the student enrolled for the right courses and proceeds to register the student.
+
+If errors are found, the school registrar registers the student provisionally and asks the student to rectify these with the Academic Registrar’s office then proceed with the full registration.
+
+Typical flow of events
+Student enrollment for courses to be studied
+Payment of required fees
+Submission of bio-data form and required documents
+Verification of submitted documents (missing documents in the system should result in provisional registration)
+Registration of student
+Withdraw
+Withdraw Registration
+According to the University Policies, a student is allowed a maximum of two withdrawals, each withdrawal constituting an academic year. Application for permission to withdraw is made to the student’s Board of Studies clearly stating reasons for withdrawal. After the withdrawal period, a student is supposed to apply to resume his/her studies indicating that the circumstances stated prior are no longer a hindrance to his/her studies. Requests to extend a period of withdrawal beyond what was earlier stated in the application for withdrawal must be made to the Board of Studies also stating reasons for the extension.
+
+A period of withdrawal does not count against the period of candidature for the programme is registered for. The process of withdrawal registration takes the following steps;
+
+Application for withdrawal:
+A student applies to the School Board through the Deputy Principal requesting permission to withdraw. In this letter, a student states the reasons for withdrawing and a time when he/she thinks they will be able to resume studies. Periods of withdrawals are restricted to an academic year. Depending on the time that a student has applied for this withdrawal the Deputy Principal may grant the student permission to withdraw and later present this to the board at their next seating e.g. if a student applied at the start of the examination period. Applications received are then presented to the School Board that decides whether one should be granted permission to withdraw or not.
+
+Assessment of applications:
+Applications for withdrawal are presented to the School Board where they are assessed depending on the reason for withdrawal and permission to withdraw is then granted or denied. 
+
+Forwarding of Withdraw Letters to the School Registrar:
+After this assessment, three copies of letters for withdrawal are printed for applicants that have been granted permission to withdraw. One copy is picked by the applicant from the Deputy Principal, another copy is retained by the School Board, and the final copy is forwarded to the school registrar to support withdrawal registration/deregistration. The letter indicates that permission to withdraw has been granted, the start date of the withdrawal, the end date of the withdrawal, reasons for the withdrawal, and how many withdrawals one is left with.
+
+Application for resume of studies (to extend withdrawal period):
+After the period of withdrawal is complete, a student can choose to apply for an extension of their withdrawal or apply to resume their studies normally. Applications for extension must state the reason for one’s request for an extension and follow the ‘application for withdrawal’ process. The letters are addressed to the School’s Deputy Principal who presents them to the School Board
+
+Receipt of resume letters:
+Students that applied for an extension of withdrawal receive ‘Withdrawal Extension Letters’ if granted. Those that applied for a resume of studies receive ‘Resume Letters’. These are picked from the Deputy Registrar.
+
+Cancellation of Registration:
+Students that want to resume their studies then visit the School Registrar’s office to cancel their registration from the semester when they applied for permission to withdraw. The registrar asks for a copy of their ‘Resume Letter’, a copy of their ‘Withdraw Letter’, and their identification card. The registrar then proceeds to cancel their registration. On cancellation of the registration, the system asks for the reason for cancellation to which the registration selects ‘Withdrawal’ and states the period of withdrawal. The student then registers normally and proceeds with their studies.
+
+Stay-put Registration
+Students are advised to stay put by the Examinations Board given their performance in previous semesters. For example, if a student has accumulated a number of retakes that when done with the normal progress courses will give them a Semester Load that is greater than the maximum load, 28 Credit Units, as stipulated by the university policies, the Board notifies the student advising him/her to stay put and first complete the retakes before resuming their normal progress
+
+A student is allowed a maximum of two stay put periods with each period comprising an academic year. Once advised by the examinations board and a student decides to stay put, he/she has to partake in stay put registration. The process takes the following steps;
+
+Selection of students to stay put:
+During the Examinations Board Meeting, members of the board review the results of the different students and identify students with many retakes from preceding semesters, students that will get a semester load that is more than 28 Credit Units if they are to do the retakes with the next semester’s courses. From this review, a list of students that are advised to stay put is drafted and stay put notices forwarded to each student advising them to stay put and complete their retakes first. Those that choose to take heed to the notice then visit the registrar’s office and pick stay put registration forms
+
+Submission of registration forms:
+Students pick stay put registration forms from the school registrar and fill them in indicating the courses to be done, how long they intend to stay put for (the minimum is an academic year). They also attach a copy of the stay put notice from the Examinations Board and then submit this to the school registrar. The registrar then captures this information on the ACMIS System and forwards a request to the School Bursar/Accountant requesting for the amount of fees the student is supposed to pay.
+
+Computation of fees to be paid:
+Taking into account the courses to be done by the student during the stay put period as indicated on the registration form, the amount of fees to be paid per semester is computed. Adding fees like the functional fees where necessary, this total is then forwarded to the School Registrar. The registrar then updates the student’s account to indicate the fees structure received from the school bursar.
+
+Registration of stay put students:
+With the fees structure in place, the registrar then completes the student’s registration process in the ACMIS System. The fees to be paid are reflected as invoices on the student’s portal and they can proceed with generation of a PRN and payment of required fees. The student’s status reflects that he/she is a stay put student once registered by the registrar. After the stay put period, the student proceeds with normal registration and academic progress.
+
+Graduate Registration
+All registration will be done in Colleges and the School of Law. For Makerere University Business School (MUBS) students, there are two levels of registration. 
+
+The first level of registration is at the DRGT, Senate Building level four. Thereafter, students are expected to register at MUBS. 
+
+Once a candidate has been accepted for registration, one must complete a registration form, which accompanies the letter of admission, and return it to the College/School. 
+
+All registration is handled by Registrars. Before Registering, one is not a Makerere University Student. Once a candidate has been accepted for registration, she/he must complete registration forms in duplicate, register at his/her respective school and make sure the forms are duly stamped and signed by the Registrar. 
+
+A student is only registered after fulfilling the following requirements: 
+
+Evidence of payment of University fees as indicated on the admission letter
+Two copies of certified academic transcripts/certificates10 
+Filling registration forms (Online/Hard Copies) issued by Registrars at the Schools or picked from Room 307. 
+Current valid identity card. 
+Two passport size photographs, 2 to be fixed on the registration forms. 
+Any graduate student who will not have registered according to the Registration Timetable and would have not communicated with the Director‘s office, Directorate of Research and Graduate Training (DRGT) shall be deemed to have declined the offer of a place at the University. Please note that the University does not reserve places for applicants who do not turn up. Such applicants shall re-apply after a subsequent call for applications
+
+The student registration is when
+
+A student is only registered after fulfilling the following requirements: 
+
+Evidence of payment of University fees as indicated on the admission letter
+Two copies of certified academic transcripts/certificates10 
+Filling registration forms (Online/Hard Copies) issued by Registrars at the Schools or picked from Room 307. 
+Current valid identity card. 
+Two passport size photographs, 2 to be fixed on the registration forms. 
