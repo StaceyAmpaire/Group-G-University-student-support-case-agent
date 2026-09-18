@@ -1,0 +1,16 @@
+source_id,document_title,file_name,source_type,publisher,source_url,date_accessed,description
+SRC-001,Academic Calendar,academic_calendar.txt,Published university source,Makerere University,https://mak.ac.ug/students/academic-calendar,2026-09-17,Academic calendar information
+SRC-002,Accommodation and Student Housing,accommodation_and_student_housing.txt,Published university source,Makerere University,https://mak.ac.ug/students/accommodation-student-housing,2026-09-17,Student accommodation and housing information
+SRC-003,Admission Lists,admission_lists.txt,Published university source,Makerere University,https://mak.ac.ug/study-mak/admission-announcements,2026-09-17,Admission list information
+SRC-004,Catering Services,catering_services.txt,Published university source,Makerere University,https://mak.ac.ug/students/catering-services,2026-09-17,Catering services information
+SRC-005,Counselling and Guidance,counselling_and_guidance.txt,Published university source,Makerere University,https://mak.ac.ug/about/counselling-guidance,2026-09-17,Counselling and guidance information
+SRC-006,Courses at Makerere,courses_at_mak.txt,Published university source,Makerere University,https://mak.ac.ug/study-mak/courses-programs,2026-09-17,Course information
+SRC-007,Fees and Payment,fees_payment.txt,Published university source,Makerere University,https://mak.ac.ug/study-mak/fees-payment-structure,2026-09-17,Fees and payment information
+SRC-008,Grading at Makerere,grading_at_mak.txt,Published university source,Makerere University,https://mak.ac.ug/students/grading,2026-09-17,Grading information
+SRC-009,Graduation Requirements,graduation_requirements.txt,Published university source,Makerere University,https://mak.ac.ug/students/graduation-requirements,2026-09-17,Graduation requirements
+SRC-010,Health and Medical Services,health_and_medical_services.txt,Published university source,Makerere University,https://mak.ac.ug/about/hospital-health-care,2026-09-17,Health and medical services
+SRC-011,MUK Examination Policy,muk_examination_policy.txt,Published university source,Makerere University,https://mak.ac.ug/students/examinations,2026-09-17,Examination policy information
+SRC-012,Registration,registration.txt,Published university source,Makerere University,https://mak.ac.ug/study-mak/registration,2026-09-17,Student registration information
+SRC-013,Student Support Directories,student_support_dicts.txt,Published university source,Makerere University,https://support.mak.ac.ug/,2026-09-17,Student support directory information
+SRC-014,Accessing Timetables,to_access_timetables.txt,Published university source,Makerere University,https://timetable.mak.ac.ug/,2026-09-17,Timetable access information
+SRC-015,Upcoming Events,upcoming_events_link.txt,Published university source,Makerere University,https://events.mak.ac.ug/,2026-09-17,Upcoming university events

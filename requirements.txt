@@ -1,2 +1,5 @@
-groq
+google-genai
 python-dotenv
+numpy
+groq
+sentence-transformers
