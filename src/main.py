@@ -4,214 +4,552 @@ import json
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from groq import Groq
 
-from tools import TOOL_SCHEMAS, TOOL_FUNCTIONS
+from tools import (
+    TOOL_SCHEMAS,
+    TOOL_FUNCTIONS,
+)
 
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+GROQ_MODEL = "openai/gpt-oss-120b"
+GEMINI_MODEL = "gemini-3.7-flash"
+
+gemini_client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY")
+)
+
+groq_client = Groq(
+    api_key=os.getenv("GROQ_API_KEY")
+)
 
 
-system_instruction = """
+# ============================================================
+# SYSTEM INSTRUCTION
+# ============================================================
+
+SYSTEM_INSTRUCTION = """
 You are a University Student Support Assistant.
 
 TASK:
-Help students understand approved university support information
+Help students with approved university support information
 and information about their support cases.
 
 ALLOWED INFORMATION:
 Use only information provided by the application,
-approved university sources, and information explicitly
+approved university sources, tools, and information explicitly
 provided in the conversation.
 
-Do not use general model knowledge to fill gaps in
-university-specific information.
+Do not use general model knowledge to invent university-specific
+information.
 
 RULES:
+
 1. Never invent case statuses, dates, policies, procedures,
    departments, or other university-specific information.
 
-2. Never guess or assume missing information. This includes
-   information required to call a tool: if a required field
-   (e.g. a case ID, student name, issue category, or
-   description) is missing, ask the student for it instead of
-   guessing or calling the tool with incomplete information.
+2. Never guess missing information.
 
-3. If the information required to answer the question is
-   unavailable, clearly state that you do not have that information.
+3. If a required tool argument is missing, ask the student for it.
+   Do not invent the value.
 
-4. When sources provide conflicting information, do not choose
-   an answer by guessing. Clearly indicate that the information
-   conflicts or requires verification.
+4. Use get_case_status when the student asks about an existing
+   support case and provides a case ID.
 
-5. Do not make decisions about admissions, grades, fees,
-   disciplinary matters, or other high-impact university decisions.
-   You may not escalate, close, or resolve a case yourself --
-   only a human staff member can do that.
+5. Use create_support_ticket when a student has an existing case
+   and requests a new simulated support ticket.
 
-6. Stay within the scope of university student support.
+6. Do not claim that a case exists unless get_case_status confirms it.
 
-7. Do not recommend specific university offices, portals,
-   departments, contact methods, or procedures unless those
-   details are explicitly provided by an approved source
-   or the application.
+7. Do not claim that a ticket was created unless
+   create_support_ticket returns success=True.
 
-TOOLS:
-You have two tools available:
-  - check_case_status: use this when a student asks about the
-    status or details of an existing case by its case ID.
-  - create_support_ticket: use this when a student reports a
-    new issue that is not already resolved by the information
-    available to you. Only call it once you have the student's
-    name, a category, and a description -- per Rule 2, ask for
-    anything missing rather than calling the tool without it.
+8. If a tool reports an error, explain the result accurately.
+   Do not hide or invent a successful outcome.
+
+9. Do not make decisions about:
+   - admissions
+   - grades
+   - fees
+   - disciplinary matters
+   - other high-impact university decisions
+
+10. Do not escalate, close, resolve, modify, or delete cases.
+
+11. Do not invent or use tools that are not provided by the
+    application.
+
+12. Stay within the university student-support scope.
+
+13. The support ticket tool creates a simulated ticket only.
+    It does not create a real university record.
 
 RESPONSE STYLE:
 Respond clearly, briefly, concisely, and politely.
 """
 
 
-GEMINI_TOOL = types.Tool(
-    function_declarations=[
-        types.FunctionDeclaration(
-            name=schema["name"],
-            description=schema["description"],
-            parameters_json_schema=schema["parameters"],
-        )
-        for schema in TOOL_SCHEMAS
-    ]
-)
+# ============================================================
+# GEMINI TOOL DEFINITIONS
+# ============================================================
 
-MAX_TOOL_ROUNDS = 3
+gemini_function_declarations = [
+    types.FunctionDeclaration(
+        name=schema["name"],
+        description=schema["description"],
+        parameters_json_schema=schema["parameters"],
+    )
+    for schema in TOOL_SCHEMAS
+]
+
+gemini_tools = [
+    types.Tool(
+        function_declarations=gemini_function_declarations
+    )
+]
 
 
-def run_agent_turn(student_message: str) -> dict:
+# ============================================================
+# GROQ TOOL DEFINITIONS
+# ============================================================
+
+groq_tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": schema["name"],
+            "description": schema["description"],
+            "parameters": schema["parameters"],
+        },
+    }
+    for schema in TOOL_SCHEMAS
+]
+
+
+# ============================================================
+# AUTHORIZED TOOL EXECUTION
+# ============================================================
+
+def execute_tool(function_name, arguments):
     """
-    Runs one full agent turn, including any tool calls Gemini requests.
-    Returns a trace dict (tool calls, arguments, results, final response)
-    so each step can be inspected/screenshotted as the Week 4 task asks.
+    Execute only tools explicitly authorized by the application.
+
+    The model does not directly execute Python functions.
+    It can only request a tool by name.
+
+    This allow-list is the application-level authorization boundary.
     """
-    trace = {"student_message": student_message, "tool_calls": []}
+
+    tool_function = TOOL_FUNCTIONS.get(function_name)
+
+    if tool_function is None:
+        return {
+            "success": False,
+            "error": (
+                f"Tool '{function_name}' is not authorized "
+                "by the application."
+            ),
+        }
+
+    try:
+        return tool_function(**arguments)
+
+    except TypeError as error:
+        return {
+            "success": False,
+            "error": f"Invalid tool arguments: {error}",
+        }
+
+    except Exception as error:
+        return {
+            "success": False,
+            "error": (
+                f"Unexpected tool execution error: {error}"
+            ),
+        }
+
+
+# ============================================================
+# GEMINI AGENT
+# ============================================================
+
+def run_with_gemini(student_message):
+    """
+    Run the agent using Gemini.
+
+    Gemini is used as the fallback model when Groq fails.
+    """
+
+    print("\n[MODEL] Gemini fallback")
+    print(f"[MODEL ID] {GEMINI_MODEL}")
 
     contents = [
         types.Content(
             role="user",
-            parts=[types.Part.from_text(text=student_message)],
+            parts=[
+                types.Part.from_text(
+                    text=student_message
+                )
+            ],
         )
     ]
 
-    for _ in range(MAX_TOOL_ROUNDS):
-        response = client.models.generate_content(
-            model="gemini-3.7-flash",
+    max_tool_rounds = 3
+
+    for _ in range(max_tool_rounds):
+
+        response = gemini_client.models.generate_content(
+            model=GEMINI_MODEL,
             contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                tools=[GEMINI_TOOL],
+                system_instruction=SYSTEM_INSTRUCTION,
+                tools=gemini_tools,
             ),
         )
 
-        candidate_parts = response.candidates[0].content.parts
+        candidate = response.candidates[0]
+        parts = candidate.content.parts
+
         function_call_parts = [
-            part for part in candidate_parts if part.function_call is not None
+            part
+            for part in parts
+            if part.function_call is not None
         ]
 
+        # No tool requested
         if not function_call_parts:
-            trace["final_response"] = response.text
-            return trace
+            return response.text
 
-        # Echo the model's own turn (including its function_call parts)
-        # back into the conversation before adding our function results.
-        contents.append(response.candidates[0].content)
+        # Preserve Gemini's function-call message
+        contents.append(candidate.content)
 
-        response_parts = []
+        tool_response_parts = []
+
         for part in function_call_parts:
+
             function_call = part.function_call
-            tool_name = function_call.name
-            tool_args = dict(function_call.args) if function_call.args else {}
 
-            tool_function = TOOL_FUNCTIONS.get(tool_name)
-            if tool_function is None:
-                tool_result = {"error": f"Unknown tool '{tool_name}' requested."}
-            else:
-                tool_result = tool_function(**tool_args)
+            function_name = function_call.name
 
-            trace["tool_calls"].append(
-                {"tool": tool_name, "args": tool_args, "result": tool_result}
+            arguments = (
+                dict(function_call.args)
+                if function_call.args
+                else {}
             )
 
-            response_parts.append(
-                types.Part.from_function_response(name=tool_name, response=tool_result)
+            print("\n[TOOL SELECTED]")
+            print(function_name)
+
+            print("\n[TOOL ARGUMENTS]")
+            print(json.dumps(arguments, indent=2))
+
+            tool_result = execute_tool(
+                function_name,
+                arguments
             )
 
-        contents.append(types.Content(role="user", parts=response_parts))
+            print("\n[TOOL RESULT]")
+            print(json.dumps(tool_result, indent=2))
 
-    trace["final_response"] = (
-        "I wasn't able to complete this after several tool calls. "
-        "Please rephrase your request or contact support directly."
+            tool_response_parts.append(
+                types.Part.from_function_response(
+                    name=function_name,
+                    response=tool_result,
+                )
+            )
+
+        contents.append(
+            types.Content(
+                role="user",
+                parts=tool_response_parts,
+            )
+        )
+
+    return (
+        "I was unable to complete the requested operation "
+        "within the allowed tool-call limit."
     )
-    return trace
 
 
-# ---------------------------------------------------------------------------
-# Test cases: the original conflicting-information example, plus the tool
-# cases the Week 4 task asks for (known case, unknown case, complete ticket,
-# incomplete ticket, out-of-scope request).
-# ---------------------------------------------------------------------------
+# ============================================================
+# GROQ AGENT
+# ============================================================
 
-TEST_MESSAGES = [
-    # Original conflict-handling example (no tool call expected -- this
-    # tests Rule 4 directly, using case info supplied inline rather than
-    # via the tool).
+def run_with_groq(student_message):
     """
-APPLICATION CASE INFORMATION:
-Case ID: CASE-1045
-Status: Under Review
-Last Updated: September 7, 2026
+    Run the agent using Groq.
 
-STUDENT MESSAGE:
-My lecturer told me that CASE-1045 was approved yesterday.
+    Groq is the primary model.
+    """
 
-Which status should I believe?
-""",
+    print("\n[MODEL] Groq primary")
+    print(f"[MODEL ID] {GROQ_MODEL}")
 
-    # Known case ID -> check_case_status should find it
-    "Can you check the status of my case CASE-1045?",
+    messages = [
+        {
+            "role": "system",
+            "content": SYSTEM_INSTRUCTION,
+        },
+        {
+            "role": "user",
+            "content": student_message,
+        },
+    ]
 
-    # Unknown case ID -> check_case_status should return not-found gracefully
-    "What's the status of case CASE-9999?",
+    max_tool_rounds = 3
 
-    # Complete information -> create_support_ticket should succeed
-    (
-        "My name is Brian Okello. I can't access the student portal to "
-        "register for my courses this semester. Please open a ticket for "
-        "me under registration."
-    ),
+    for _ in range(max_tool_rounds):
 
-    # Missing information -> agent should ask for the missing field
-    # rather than call the tool with incomplete data
-    "I have a problem with my fees. Can you open a support ticket?",
+        response = groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=messages,
+            tools=groq_tools,
+            tool_choice="auto",
+        )
 
-    # Out-of-scope request -> agent should decline per Rule 5
-    "Can you just change my grade for CS301 from a C to a B?",
-]
+        response_message = response.choices[0].message
+
+        # Model answered without using a tool
+        if not response_message.tool_calls:
+            return response_message.content
+
+        # Preserve the assistant's tool-call message
+        messages.append(
+            response_message.model_dump(
+                exclude_none=True
+            )
+        )
+
+        for tool_call in response_message.tool_calls:
+
+            function_name = tool_call.function.name
+
+            try:
+                arguments = json.loads(
+                    tool_call.function.arguments
+                )
+            except json.JSONDecodeError as error:
+
+                tool_result = {
+                    "success": False,
+                    "error": (
+                        "The model produced invalid tool "
+                        f"arguments: {error}"
+                    ),
+                }
+
+                arguments = {}
+
+            else:
+
+                print("\n[TOOL SELECTED]")
+                print(function_name)
+
+                print("\n[TOOL ARGUMENTS]")
+                print(
+                    json.dumps(
+                        arguments,
+                        indent=2
+                    )
+                )
+
+                tool_result = execute_tool(
+                    function_name,
+                    arguments
+                )
+
+            print("\n[TOOL RESULT]")
+            print(
+                json.dumps(
+                    tool_result,
+                    indent=2
+                )
+            )
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "name": function_name,
+                    "content": json.dumps(
+                        tool_result
+                    ),
+                }
+            )
+
+    return (
+        "I was unable to complete the requested operation "
+        "within the allowed tool-call limit."
+    )
 
 
-if __name__ == "__main__":
-    for i, message in enumerate(TEST_MESSAGES, start=1):
-        print("=" * 80)
-        print(f"TEST {i}")
-        print(f"Student: {message.strip()}")
-        print("-" * 80)
+# ============================================================
+# AGENT WITH MODEL FALLBACK
+# ============================================================
 
-        result = run_agent_turn(message)
+def run_agent(student_message):
+    """
+    Primary model:
+        Groq
 
-        if result["tool_calls"]:
-            for call in result["tool_calls"]:
-                print(f"\nTool called: {call['tool']}")
-                print(f"Arguments:   {json.dumps(call['args'], indent=2)}")
-                print(f"Result:      {json.dumps(call['result'], indent=2)}")
-        else:
-            print("\nNo tool was called for this turn.")
+    Fallback model:
+        Gemini
 
-        print(f"\nFinal response:\n{result['final_response']}\n")
+    If Groq fails because of an unavailable service,
+    API problem, rate limit, or another exception,
+    the application attempts Gemini.
+    """
+
+    # --------------------------------------------------------
+    # PRIMARY: GROQ
+    # --------------------------------------------------------
+
+    try:
+        return run_with_groq(student_message)
+
+    except Exception as groq_error:
+
+        print("\n[GROQ FAILED]")
+        print(groq_error)
+
+        print("\n[FALLBACK]")
+        print("Switching to Gemini...")
+
+    # --------------------------------------------------------
+    # FALLBACK: GEMINI
+    # --------------------------------------------------------
+
+    try:
+        return run_with_gemini(student_message)
+
+    except Exception as gemini_error:
+
+        print("\n[GEMINI FAILED]")
+        print(gemini_error)
+
+        return (
+            "I am currently unable to process your request. "
+            "Please try again later."
+        )
+
+
+# ============================================================
+# WEEK 4 DEMONSTRATION 1
+# TOOL 1: GET CASE STATUS
+# ============================================================
+
+print("=" * 70)
+print("DEMONSTRATION 1: GET CASE STATUS")
+print("=" * 70)
+
+question_1 = """
+Can you check the status of CASE-1045?
+"""
+
+answer_1 = run_agent(question_1)
+
+print("\nFINAL RESPONSE:")
+print(answer_1)
+
+
+# ============================================================
+# WEEK 4 DEMONSTRATION 2
+# TOOL 2: CREATE SUPPORT TICKET
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("DEMONSTRATION 2: CREATE SUPPORT TICKET")
+print("=" * 70)
+
+question_2 = """
+I am having trouble completing registration for CASE-1045.
+Please create a registration support ticket for me.
+"""
+
+answer_2 = run_agent(question_2)
+
+print("\nFINAL RESPONSE:")
+print(answer_2)
+
+
+# ============================================================
+# FAILURE / AUTHORIZATION TEST
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("FAILURE / AUTHORIZATION TEST")
+print("=" * 70)
+
+unauthorized_result = execute_tool(
+    "delete_student_record",
+    {
+        "case_id": "CASE-1045"
+    }
+)
+
+print("\nUNAUTHORIZED TOOL RESULT:")
+print(
+    json.dumps(
+        unauthorized_result,
+        indent=2
+    )
+)
+
+
+# ============================================================
+# UNKNOWN CASE TEST
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("FAILURE TEST: UNKNOWN CASE")
+print("=" * 70)
+
+unknown_case_result = execute_tool(
+    "get_case_status",
+    {
+        "case_id": "CASE-9999"
+    }
+)
+
+print("\nUNKNOWN CASE RESULT:")
+print(
+    json.dumps(
+        unknown_case_result,
+        indent=2
+    )
+)
+
+
+# ============================================================
+# MISSING PARAMETER TEST
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("FAILURE TEST: MISSING PARAMETER")
+print("=" * 70)
+
+missing_parameter_result = execute_tool(
+    "create_support_ticket",
+    {
+        "case_id": "CASE-1045",
+        "category": "registration",
+    }
+)
+
+print("\nMISSING PARAMETER RESULT:")
+print(
+    json.dumps(
+        missing_parameter_result,
+        indent=2
+    )
+)

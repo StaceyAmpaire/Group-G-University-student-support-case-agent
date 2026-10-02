@@ -1,23 +1,39 @@
 """
 tools.py
 
-Implements the two agent tools for the University Student-Support Case Agent:
+Implements the two authorized tools for the
+University Student-Support Case Agent.
 
-1. check_case_status  -> deterministic lookup (Week 1 Boundary Matrix, Row 4)
-2. create_support_ticket -> AI proposes, system validates & executes (Row 6)
+Tools:
+1. get_case_status
+   - Deterministic lookup of an existing synthetic support case.
 
-Neither tool performs a human-approval-gated action. Escalation, closing a
-case, or anything touching admissions/grading/fees/discipline is explicitly
-out of scope here (Boundary Matrix Rows 8-9) and is NOT implemented.
+2. create_support_ticket
+   - Creates a low-risk simulated support ticket.
+   - The application validates the request before creating it.
+
+The model can REQUEST these tools, but it cannot execute arbitrary
+functions. Tool execution is controlled by the application layer
+in main.py.
+
+Out of scope:
+- Admissions decisions
+- Grading decisions
+- Fee decisions
+- Disciplinary decisions
+- Escalating cases
+- Closing/resolving cases
+- Changing university records
+- Any human-approval-gated action
 """
 
 from datetime import datetime, timezone
 import itertools
 
 
-# ---------------------------------------------------------------------------
-# Synthetic case data (stand-in for a real case-management system)
-# ---------------------------------------------------------------------------
+# ============================================================
+# SYNTHETIC CASE DATA
+# ============================================================
 
 SYNTHETIC_CASES = {
     "CASE-1045": {
@@ -28,6 +44,7 @@ SYNTHETIC_CASES = {
         "summary": "Course registration not reflecting on student portal.",
         "last_updated": "2026-09-20",
     },
+
     "CASE-2031": {
         "case_id": "CASE-2031",
         "student_name": "Brian Okello",
@@ -36,6 +53,7 @@ SYNTHETIC_CASES = {
         "summary": "Payment Reference Number (PRN) not recognised by portal.",
         "last_updated": "2026-09-15",
     },
+
     "CASE-3312": {
         "case_id": "CASE-3312",
         "student_name": "Patricia Ahumuza",
@@ -47,16 +65,19 @@ SYNTHETIC_CASES = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Simulated ticket store
-# ---------------------------------------------------------------------------
+# ============================================================
+# SIMULATED TICKET STORE
+# ============================================================
 
 _ticket_id_counter = itertools.count(1001)
+
 TICKET_STORE = {}
 
-# Categories the system recognises. The model may suggest a category, but
-# only one from this fixed list is ever accepted (deterministic validation,
-# per Boundary Matrix Row 7 — the AI cannot invent a routing destination).
+
+# ============================================================
+# ALLOWED TICKET CATEGORIES
+# ============================================================
+
 ALLOWED_TICKET_CATEGORIES = {
     "registration",
     "fees",
@@ -67,165 +88,244 @@ ALLOWED_TICKET_CATEGORIES = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Tool 1: Check Case Status
-# ---------------------------------------------------------------------------
+# ============================================================
+# TOOL 1: GET CASE STATUS
+# ============================================================
 
-def check_case_status(case_id: str) -> dict:
+def get_case_status(case_id: str) -> dict:
     """
-    Deterministic lookup against synthetic case data.
+    Deterministically retrieve an existing synthetic case.
 
-    Purpose: let the agent answer "what's the status of my case?" questions
-    without the model inventing an answer.
+    Input:
+        case_id: existing case identifier, e.g. CASE-1045
 
-    Input schema: { "case_id": string, required }
-    Output schema (success):
-        { "found": true, "case_id", "student_name", "category",
-          "status", "summary", "last_updated" }
-    Output schema (not found):
-        { "found": false, "case_id", "message" }
-    Failure behaviour: never raises — always returns a structured dict so
-    the model has something well-formed to reason over, even for an unknown
-    or malformed case ID.
-    """
-    if not case_id or not isinstance(case_id, str):
-        return {
-            "found": False,
-            "case_id": case_id,
-            "message": "No case ID was provided. Please supply a case ID, e.g. CASE-1045.",
+    Success output:
+        {
+            "success": True,
+            "case_id": ...,
+            "student_name": ...,
+            "category": ...,
+            "status": ...,
+            "summary": ...,
+            "last_updated": ...
         }
 
-    case = SYNTHETIC_CASES.get(case_id.strip().upper())
+    Failure output:
+        {
+            "success": False,
+            "case_id": ...,
+            "error": ...
+        }
+
+    The function does not invent information and does not raise
+    exceptions for normal invalid input.
+    """
+
+    if not isinstance(case_id, str) or not case_id.strip():
+        return {
+            "success": False,
+            "case_id": case_id,
+            "error": "case_id is required.",
+        }
+
+    normalized_case_id = case_id.strip().upper()
+
+    case = SYNTHETIC_CASES.get(normalized_case_id)
 
     if case is None:
         return {
-            "found": False,
-            "case_id": case_id,
-            "message": f"No case was found with ID '{case_id}'. Please check the ID and try again.",
+            "success": False,
+            "case_id": normalized_case_id,
+            "error": f"No case found for {normalized_case_id}.",
         }
 
-    return {"found": True, **case}
+    return {
+        "success": True,
+        **case,
+    }
 
 
-# ---------------------------------------------------------------------------
-# Tool 2: Create Support Ticket
-# ---------------------------------------------------------------------------
+# ============================================================
+# TOOL 2: CREATE SUPPORT TICKET
+# ============================================================
 
-def create_support_ticket(student_name: str, category: str, description: str) -> dict:
+def create_support_ticket(
+    case_id: str,
+    category: str,
+    description: str,
+) -> dict:
     """
-    AI proposes ticket content; this function deterministically validates
-    and executes the write (Boundary Matrix Row 6).
+    Create a low-risk simulated support ticket.
 
-    Purpose: let the agent turn an unresolved student issue into a tracked
-    ticket instead of leaving it unanswered.
+    The application validates:
+    - case ID exists
+    - category is provided
+    - category is allowed
+    - description is provided
 
-    Input schema:
-        { "student_name": string, required,
-          "category": string, required, must be one of ALLOWED_TICKET_CATEGORIES,
-          "description": string, required }
-    Output schema (success):
-        { "created": true, "ticket_id", "student_name", "category",
-          "description", "status", "created_at" }
-    Output schema (validation failure):
-        { "created": false, "errors": [string, ...] }
-    Failure behaviour: never raises — missing or invalid fields are
-    collected into "errors" and returned so the agent can ask the student
-    for the missing information rather than crash or silently guess.
+    This function does NOT:
+    - change university records
+    - change grades
+    - change fees
+    - escalate a case
+    - close a case
+    - make an admissions or disciplinary decision
+
+    Input:
+        case_id: existing support case ID
+        category: approved ticket category
+        description: student's issue
+
+    Success output:
+        {
+            "success": True,
+            "ticket": {...}
+        }
+
+    Validation failure:
+        {
+            "success": False,
+            "errors": [...]
+        }
     """
+
     errors = []
 
-    if not student_name or not str(student_name).strip():
-        errors.append("student_name is required.")
+    # Validate case ID
+    if not isinstance(case_id, str) or not case_id.strip():
+        errors.append("case_id is required.")
+    else:
+        case_id = case_id.strip().upper()
 
-    if not category or not str(category).strip():
+        if case_id not in SYNTHETIC_CASES:
+            errors.append(
+                f"No existing case was found for {case_id}."
+            )
+
+    # Validate category
+    if not isinstance(category, str) or not category.strip():
         errors.append("category is required.")
-    elif category.strip().lower() not in ALLOWED_TICKET_CATEGORIES:
-        errors.append(
-            f"'{category}' is not a recognised category. "
-            f"Allowed categories: {', '.join(sorted(ALLOWED_TICKET_CATEGORIES))}."
-        )
+    else:
+        category = category.strip().lower()
 
-    if not description or not str(description).strip():
+        if category not in ALLOWED_TICKET_CATEGORIES:
+            errors.append(
+                f"'{category}' is not an allowed category. "
+                f"Allowed categories: "
+                f"{', '.join(sorted(ALLOWED_TICKET_CATEGORIES))}."
+            )
+
+    # Validate description
+    if not isinstance(description, str) or not description.strip():
         errors.append("description is required.")
+    else:
+        description = description.strip()
 
+    # Do not create anything if validation failed
     if errors:
-        return {"created": False, "errors": errors}
+        return {
+            "success": False,
+            "errors": errors,
+        }
 
+    # Create simulated ticket
     ticket_id = f"TICKET-{next(_ticket_id_counter)}"
+
     ticket = {
         "ticket_id": ticket_id,
-        "student_name": student_name.strip(),
-        "category": category.strip().lower(),
-        "description": description.strip(),
+        "case_id": case_id,
+        "category": category,
+        "description": description,
         "status": "open",
-        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "created_at": datetime.now(timezone.utc).isoformat(
+            timespec="seconds"
+        ),
     }
 
     TICKET_STORE[ticket_id] = ticket
 
-    return {"created": True, **ticket}
+    return {
+        "success": True,
+        "ticket": ticket,
+    }
 
 
-# ---------------------------------------------------------------------------
-# Gemini function-calling schemas
-# ---------------------------------------------------------------------------
-# Declared as plain dicts here so main.py can wrap them in
-# google.genai.types.FunctionDeclaration without this module depending on
-# the genai SDK directly.
+# ============================================================
+# TOOL SCHEMAS
+# ============================================================
 
-CHECK_CASE_STATUS_SCHEMA = {
-    "name": "check_case_status",
+GET_CASE_STATUS_SCHEMA = {
+    "name": "get_case_status",
     "description": (
-        "Look up the status and details of an existing student support case "
-        "using its case ID. Use this when a student asks about the status, "
-        "progress, or details of a case they already have."
+        "Retrieve the current status and details of an existing "
+        "student support case using its case ID."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "case_id": {
                 "type": "string",
-                "description": "The case ID, e.g. CASE-1045.",
-            },
+                "description": (
+                    "The existing student support case ID, "
+                    "for example CASE-1045."
+                ),
+            }
         },
         "required": ["case_id"],
     },
 }
 
+
 CREATE_SUPPORT_TICKET_SCHEMA = {
     "name": "create_support_ticket",
     "description": (
-        "Create a new support ticket for a student issue that is not already "
-        "resolved by retrieved knowledge or an existing case. Use this when "
-        "a student reports a new problem that needs human follow-up."
+        "Create a low-risk simulated support ticket for an "
+        "existing student support case. The application validates "
+        "the case ID and ticket category before creating the ticket."
     ),
     "parameters": {
         "type": "object",
         "properties": {
-            "student_name": {
+            "case_id": {
                 "type": "string",
-                "description": "The student's full name.",
+                "description": (
+                    "An existing student support case ID."
+                ),
             },
             "category": {
                 "type": "string",
                 "description": (
-                    "Best-guess category for the issue. Must be one of: "
+                    "The support category. Must be one of: "
                     + ", ".join(sorted(ALLOWED_TICKET_CATEGORIES))
                 ),
             },
             "description": {
                 "type": "string",
-                "description": "A clear description of the student's issue.",
+                "description": (
+                    "A clear description of the student's issue."
+                ),
             },
         },
-        "required": ["student_name", "category", "description"],
+        "required": [
+            "case_id",
+            "category",
+            "description",
+        ],
     },
 }
 
-TOOL_SCHEMAS = [CHECK_CASE_STATUS_SCHEMA, CREATE_SUPPORT_TICKET_SCHEMA]
 
-# Dispatch table used by main.py to execute a tool call by name
+TOOL_SCHEMAS = [
+    GET_CASE_STATUS_SCHEMA,
+    CREATE_SUPPORT_TICKET_SCHEMA,
+]
+
+
+# ============================================================
+# AUTHORIZED TOOL DISPATCH TABLE
+# ============================================================
+
 TOOL_FUNCTIONS = {
-    "check_case_status": check_case_status,
+    "get_case_status": get_case_status,
     "create_support_ticket": create_support_ticket,
 }
