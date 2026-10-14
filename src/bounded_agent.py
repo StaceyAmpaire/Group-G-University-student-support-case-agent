@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import json
+import re
 
 from dotenv import load_dotenv
 from google import genai
@@ -46,7 +47,7 @@ WORKFLOW:
 - Check the case before deciding whether a ticket is justified.
 - Use one tool at a time.
 - Consider the actual tool result before deciding the next action.
-- - Create a follow-up ticket only when the student explicitly
+- Create a follow-up ticket only when the student explicitly
   requests one, the case was successfully checked, and the
   student provides a clear issue requiring follow-up.
 - Do not create a duplicate ticket automatically just because
@@ -110,6 +111,36 @@ TOOLS = [
 ]
 
 
+def has_explicit_ticket_request(student_message):
+    """Return True only when the message clearly requests ticket creation.
+
+    This is an application-side authorisation check, not a decision delegated
+    to the language model. It accepts ordinary wording such as "create a
+    follow-up support ticket" while rejecting common explicit negations.
+    """
+    message = re.sub(r"\s+", " ", str(student_message or "").lower())
+    message = message.replace("-", " ")
+
+    negative_patterns = (
+        r"\bdo not\s+(?:create|open|raise|submit|log)\b",
+        r"\bdon't\s+(?:create|open|raise|submit|log)\b",
+        r"\bdont\s+(?:create|open|raise|submit|log)\b",
+        r"\bshould not\s+(?:create|open|raise|submit|log)\b",
+        r"\bno need to\s+(?:create|open|raise|submit|log)\b",
+        r"\b(?:i do not want|i don't want|i dont want|without)\b.{0,35}\bticket\b",
+        # Questions asking about the process are not permission to act.
+        r"\b(?:how do i|how can i|should i|should we|do i need to|what is the process to)\b.{0,80}\b(?:create|open|raise|submit|log)\b.{0,50}\bticket\b",
+    )
+    if any(re.search(pattern, message) for pattern in negative_patterns):
+        return False
+
+    # Permit short modifiers (e.g. "follow-up") between the action and ticket.
+    return bool(re.search(
+        r"\b(?:create|open|raise|submit|log)\b.{0,50}\b(?:support\s+)?ticket\b",
+        message,
+    ))
+
+
 def execute_tool(name, args, state, student_message):
     """Authorize, validate and execute one approved tool."""
 
@@ -120,7 +151,8 @@ def execute_tool(name, args, state, student_message):
         }
 
     if name == "get_case_status":
-        case_id = str(args.get("case_id", "")).strip()
+        raw_case_id = args.get("case_id")
+        case_id = raw_case_id.strip() if isinstance(raw_case_id, str) else ""
 
         if not case_id:
             return {
@@ -130,57 +162,52 @@ def execute_tool(name, args, state, student_message):
 
         result = get_case_status(case_id)
 
-        if result.get("success"):
-            state["checked_case_id"] = case_id
-            state["case_result"] = result
+        # Replace previous check state even on failure, so an old successful
+        # lookup cannot authorize a ticket after a later failed lookup.
+        state["checked_case_id"] = (
+            case_id.strip().upper() if result.get("success") else None
+        )
+        state["case_result"] = result
 
         return result
 
     if name == "create_support_ticket":
-        case_id = str(args.get("case_id", "")).strip()
-        category = str(args.get("category", "")).strip()
-        description = str(args.get("description", "")).strip()
+        raw_case_id = args.get("case_id")
+        raw_category = args.get("category")
+        raw_description = args.get("description")
+        case_id = raw_case_id.strip() if isinstance(raw_case_id, str) else ""
+        category = raw_category.strip() if isinstance(raw_category, str) else ""
+        description = raw_description.strip() if isinstance(raw_description, str) else ""
 
         # Require explicit student permission to create a ticket.
-        message = student_message.lower()
-        explicit_request = any(
-            phrase in message
-            for phrase in (
-                "create a support ticket",
-                "create a ticket",
-                "open a ticket",
-                "raise a ticket",
-                "submit a ticket",
-            )
-        )
-
-        if not explicit_request:
+        if not has_explicit_ticket_request(student_message):
             return {
                 "success": False,
                 "error": "The student has not explicitly requested ticket creation."
             }
 
         # A case must have been checked successfully first.
-        if not state.get("case_result", {}).get("success"):
+        if not (state.get("case_result") or {}).get("success"):
             return {
                 "success": False,
                 "error": "Check the existing case successfully before creating a ticket."
             }
 
-        if case_id != state.get("checked_case_id"):
+        if case_id.upper() != state.get("checked_case_id"):
             return {
                 "success": False,
                 "error": "The ticket case ID must match the checked case."
             }
 
-        if state["case_result"].get("status") not in {
-    "Under Review",
-    "in_progress",
-    "In Progress",
-}:
+        status = str(state["case_result"].get("status", "")).strip().lower()
+        status = status.replace("_", " ").replace("-", " ")
+        if status not in {"under review", "in progress"}:
             return {
                 "success": False,
-                "error": "A ticket cannot be created by this workflow unless the case is Under Review."
+                "error": (
+                    "A ticket can be created by this workflow only for a case "
+                    "whose status is in progress or under review."
+                )
             }
 
         if not category or category.lower() not in ALLOWED_CATEGORIES:
