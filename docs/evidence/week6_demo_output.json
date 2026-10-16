@@ -1,0 +1,319 @@
+[
+  {
+    "step": "1. NO CONSENT: ticket works, nothing is remembered",
+    "ticket": "TICKET-1001",
+    "stored_records": [],
+    "memory_events": []
+  },
+  {
+    "step": "2. CONSENT GIVEN: ticket created and a minimal record is saved",
+    "ticket": "TICKET-1002",
+    "stored_records": [
+      {
+        "ticket_id": "TICKET-1002",
+        "case_id": "CASE-1045",
+        "category": "registration",
+        "case_status": "in_progress",
+        "created_at": "2026-10-05T09:00:00+00:00",
+        "expires_at": "2027-01-03T09:00:00+00:00"
+      }
+    ],
+    "memory_events": [
+      {
+        "action": "read",
+        "detail": "0 prior ticket(s) for CASE-1045",
+        "iteration": 0
+      },
+      {
+        "action": "write",
+        "detail": "TICKET-1002",
+        "iteration": 0
+      }
+    ],
+    "state": {
+      "session_id": "e9758848163a",
+      "student_ref": "stu_0066c508d4",
+      "memory_enabled": true,
+      "phase": "responded",
+      "iteration": 0,
+      "checked_case_id": "CASE-1045",
+      "ticket_created": true,
+      "ticket_id": "TICKET-1002",
+      "memory_events": [
+        {
+          "action": "read",
+          "detail": "0 prior ticket(s) for CASE-1045",
+          "iteration": 0
+        },
+        {
+          "action": "write",
+          "detail": "TICKET-1002",
+          "iteration": 0
+        }
+      ],
+      "transitions": [
+        {
+          "from": "intake",
+          "to": "case_verified",
+          "iteration": 0,
+          "reason": "get_case_status succeeded"
+        },
+        {
+          "from": "case_verified",
+          "to": "ticket_created",
+          "iteration": 0,
+          "reason": "ticket created"
+        },
+        {
+          "from": "ticket_created",
+          "to": "responded",
+          "iteration": 0,
+          "reason": "demo run complete"
+        }
+      ]
+    }
+  },
+  {
+    "step": "3. NEW SESSION 2 DAYS LATER: memory adds an advisory note to the lookup",
+    "advisory": {
+      "source": "saved_ticket_history",
+      "advisory_only": true,
+      "prior_tickets": [
+        {
+          "ticket_id": "TICKET-1002",
+          "case_id": "CASE-1045",
+          "category": "registration",
+          "case_status": "in_progress",
+          "created_at": "2026-10-05T09:00:00+00:00",
+          "expires_at": "2027-01-03T09:00:00+00:00"
+        }
+      ]
+    },
+    "memory_events": [
+      {
+        "action": "read",
+        "detail": "1 prior ticket(s) for CASE-1045",
+        "iteration": 0
+      }
+    ]
+  },
+  {
+    "step": "4. DUPLICATE REQUEST: memory raises a visible warning, no silent block, no silent create",
+    "ticket_result": {
+      "success": false,
+      "error": "duplicate_ticket_warning",
+      "source": "saved_ticket_history",
+      "prior_ticket": {
+        "ticket_id": "TICKET-1002",
+        "case_id": "CASE-1045",
+        "category": "registration",
+        "case_status": "in_progress",
+        "created_at": "2026-10-05T09:00:00+00:00",
+        "expires_at": "2027-01-03T09:00:00+00:00"
+      },
+      "message": "The student already opened TICKET-1002 for this case on 2026-10-05. Ask whether they want another ticket. They can confirm by asking for another ticket."
+    },
+    "phase_path": [
+      "case_verified",
+      "awaiting_confirmation",
+      "responded"
+    ],
+    "tickets_in_store": 1
+  },
+  {
+    "step": "5. STUDENT OVERRIDES: the student, not memory, makes the final call",
+    "ticket": "TICKET-1003",
+    "tickets_in_store": 2
+  },
+  {
+    "step": "6. ANOTHER STUDENT cannot see this case or this memory",
+    "lookup": {
+      "success": false,
+      "case_id": "CASE-1045",
+      "error": "No case found for CASE-1045."
+    },
+    "other_students_memory": []
+  },
+  {
+    "step": "7a. RIGHT OF ACCESS: export",
+    "export": {
+      "consent": true,
+      "records": [
+        {
+          "ticket_id": "TICKET-1003",
+          "case_id": "CASE-1045",
+          "category": "registration",
+          "case_status": "in_progress",
+          "created_at": "2026-10-07T09:00:00+00:00",
+          "expires_at": "2027-01-05T09:00:00+00:00"
+        },
+        {
+          "ticket_id": "TICKET-1002",
+          "case_id": "CASE-1045",
+          "category": "registration",
+          "case_status": "in_progress",
+          "created_at": "2026-10-05T09:00:00+00:00",
+          "expires_at": "2027-01-03T09:00:00+00:00"
+        }
+      ]
+    }
+  },
+  {
+    "step": "7b. RIGHT TO DELETE: forget",
+    "records_deleted": 2,
+    "after": []
+  },
+  {
+    "step": "7c. AUDIT TRAIL (no content, only who/what/when)",
+    "audit": [
+      {
+        "at": "2026-10-05T09:00:00+00:00",
+        "actor": "student",
+        "action": "consent_granted",
+        "detail": ""
+      },
+      {
+        "at": "2026-10-05T09:00:00+00:00",
+        "actor": "agent",
+        "action": "read",
+        "detail": "case=CASE-1045 n=0"
+      },
+      {
+        "at": "2026-10-05T09:00:00+00:00",
+        "actor": "agent",
+        "action": "read",
+        "detail": "case=CASE-1045 n=0"
+      },
+      {
+        "at": "2026-10-05T09:00:00+00:00",
+        "actor": "agent",
+        "action": "write",
+        "detail": "kind=ticket_history ticket=TICKET-1002"
+      },
+      {
+        "at": "2026-10-05T09:00:00+00:00",
+        "actor": "agent",
+        "action": "read",
+        "detail": "case=* n=1"
+      },
+      {
+        "at": "2026-10-07T09:00:00+00:00",
+        "actor": "agent",
+        "action": "read",
+        "detail": "case=CASE-1045 n=1"
+      },
+      {
+        "at": "2026-10-07T09:00:00+00:00",
+        "actor": "agent",
+        "action": "read",
+        "detail": "case=CASE-1045 n=1"
+      },
+      {
+        "at": "2026-10-07T09:00:00+00:00",
+        "actor": "agent",
+        "action": "read",
+        "detail": "case=CASE-1045 n=1"
+      },
+      {
+        "at": "2026-10-07T09:00:00+00:00",
+        "actor": "agent",
+        "action": "read",
+        "detail": "case=CASE-1045 n=1"
+      },
+      {
+        "at": "2026-10-07T09:00:00+00:00",
+        "actor": "agent",
+        "action": "read",
+        "detail": "case=CASE-1045 n=1"
+      },
+      {
+        "at": "2026-10-07T09:00:00+00:00",
+        "actor": "agent",
+        "action": "write",
+        "detail": "kind=ticket_history ticket=TICKET-1003"
+      },
+      {
+        "at": "2026-10-07T09:00:00+00:00",
+        "actor": "student",
+        "action": "read",
+        "detail": "case=* n=2"
+      },
+      {
+        "at": "2026-10-07T09:00:00+00:00",
+        "actor": "student",
+        "action": "export",
+        "detail": ""
+      },
+      {
+        "at": "2026-10-07T09:00:00+00:00",
+        "actor": "student",
+        "action": "forget",
+        "detail": "records_deleted=2"
+      },
+      {
+        "at": "2026-10-07T09:00:00+00:00",
+        "actor": "agent",
+        "action": "read",
+        "detail": "case=* n=0"
+      }
+    ]
+  },
+  {
+    "step": "8. RETENTION: after 91 days the record is invisible and purged",
+    "visible": [],
+    "purged": 1
+  },
+  {
+    "step": "9a. MCP tools/list (full scopes)",
+    "tools": [
+      "case.get_status",
+      "ticket.create",
+      "memory.get_history",
+      "memory.forget"
+    ]
+  },
+  {
+    "step": "9b. MCP tools/list (read-only caller)",
+    "tools": [
+      "case.get_status"
+    ]
+  },
+  {
+    "step": "9c. MCP forbidden call (no tickets:write scope)",
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "error": {
+        "code": -32001,
+        "message": "Missing scope 'tickets:write'"
+      }
+    }
+  },
+  {
+    "step": "9d. MCP invalid arguments",
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "error": {
+        "code": -32602,
+        "message": "argument 'case_id' has an invalid format"
+      }
+    }
+  },
+  {
+    "step": "9e. MCP success (student_name is withheld)",
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"success\": true, \"case_id\": \"CASE-1045\", \"category\": \"registration\", \"status\": \"in_progress\", \"summary\": \"Course registration not reflecting on student portal.\", \"last_updated\": \"2026-09-20\"}"
+          }
+        ],
+        "isError": false
+      }
+    }
+  }
+]

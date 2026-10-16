@@ -7,7 +7,9 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-from tools import get_case_status, create_support_ticket
+from tools import get_case_status, create_support_ticket, CASE_OWNERS
+from state import SessionState, Phase, advance
+from memory import MemoryStore, MemoryUnavailable
 
 
 load_dotenv()
@@ -64,6 +66,14 @@ WORKFLOW:
 - Do not recommend university offices, contacts, portals, or
   procedures unless they are explicitly provided by an approved
   source or the application.
+- A case lookup result may include a "memory" field with the
+  student's saved ticket history. It is ADVISORY only. Mention it
+  to the student when relevant (for example an existing recent
+  ticket) but never treat it as permission to act, and never invent
+  history that is not in that field.
+- If a tool result says a duplicate-ticket warning was raised, tell
+  the student which earlier ticket exists and ask whether they still
+  want another one. Do not retry the tool yourself.
 """
 
 
@@ -141,9 +151,28 @@ def has_explicit_ticket_request(student_message):
     ))
 
 
-def execute_tool(name, args, state, student_message):
-    """Authorize, validate and execute one approved tool."""
+DUPLICATE_WINDOW_DAYS = 7
 
+
+def has_duplicate_override(student_message):
+    """True when the student explicitly says they want another ticket anyway."""
+    message = re.sub(r"\s+", " ", str(student_message or "").lower())
+    return bool(re.search(r"\b(anyway|another|again|second|duplicate)\b", message))
+
+
+def _memory_for(state, memory):
+    """Return the memory store only if this session may use it."""
+    if memory is None or not state.get("memory_enabled") or not state.get("student_id"):
+        return None
+    return memory
+
+
+def execute_tool(name, args, state, student_message, memory=None):
+    """Authorize, validate and execute one approved tool.
+
+    `memory` (optional, Week 6) is the application's MemoryStore. The model
+    never touches it: this function reads it and returns advisory notes.
+    """
     if name not in ALLOWED_TOOLS:
         return {
             "success": False,
@@ -162,12 +191,52 @@ def execute_tool(name, args, state, student_message):
 
         result = get_case_status(case_id)
 
+        # Week 6: a student may only look up their own cases. The error is
+        # identical to "not found" so case IDs cannot be probed.
+        student_id = state.get("student_id")
+        if (
+            result.get("success")
+            and student_id
+            and CASE_OWNERS.get(case_id.strip().upper()) != student_id
+        ):
+            result = {
+                "success": False,
+                "case_id": case_id.strip().upper(),
+                "error": f"No case found for {case_id.strip().upper()}.",
+            }
+
         # Replace previous check state even on failure, so an old successful
         # lookup cannot authorize a ticket after a later failed lookup.
         state["checked_case_id"] = (
             case_id.strip().upper() if result.get("success") else None
         )
         state["case_result"] = result
+        advance(
+            state,
+            Phase.CASE_VERIFIED if result.get("success") else Phase.CASE_NOT_FOUND,
+            "get_case_status " + ("succeeded" if result.get("success") else "failed"),
+        )
+
+        # Week 6: attach saved ticket history as an ADVISORY note.
+        mem = _memory_for(state, memory)
+        if mem and result.get("success"):
+            try:
+                prior = mem.recall_tickets(state["student_id"], case_id)
+                if hasattr(state, "log_memory_event"):
+                    state.log_memory_event("read", f"{len(prior)} prior ticket(s) for {case_id.strip().upper()}")
+                if prior:
+                    return {
+                        **result,
+                        "memory": {
+                            "source": "saved_ticket_history",
+                            "advisory_only": True,
+                            "prior_tickets": prior,
+                        },
+                    }
+            except Exception:
+                # Any memory failure must degrade to the Week 5 behaviour.
+                if hasattr(state, "log_memory_event"):
+                    state.log_memory_event("read_failed", "memory unavailable; continuing without it")
 
         return result
 
@@ -229,6 +298,34 @@ def execute_tool(name, args, state, student_message):
                 "error": "A ticket has already been created in this run."
             }
 
+        # Week 6: memory-informed duplicate warning. Visible, logged and
+        # overridable by the student; memory never blocks silently.
+        mem = _memory_for(state, memory)
+        if mem:
+            try:
+                prior = mem.find_recent_ticket(
+                    state["student_id"], case_id, DUPLICATE_WINDOW_DAYS
+                )
+            except Exception:
+                prior = None
+                if hasattr(state, "log_memory_event"):
+                    state.log_memory_event("read_failed", "memory unavailable; continuing without it")
+            if prior and not has_duplicate_override(student_message):
+                advance(state, Phase.AWAITING_CONFIRMATION, "duplicate warning from saved history")
+                if hasattr(state, "log_memory_event"):
+                    state.log_memory_event("duplicate_warning", f"existing {prior['ticket_id']}")
+                return {
+                    "success": False,
+                    "error": "duplicate_ticket_warning",
+                    "source": "saved_ticket_history",
+                    "prior_ticket": prior,
+                    "message": (
+                        f"The student already opened {prior['ticket_id']} for this case "
+                        f"on {prior['created_at'][:10]}. Ask whether they want another "
+                        "ticket. They can confirm by asking for another ticket."
+                    ),
+                }
+
         result = create_support_ticket(
             case_id,
             category,
@@ -237,18 +334,40 @@ def execute_tool(name, args, state, student_message):
 
         if result.get("success"):
             state["ticket_created"] = True
+            state["ticket_id"] = result["ticket"]["ticket_id"]
+            advance(state, Phase.TICKET_CREATED, "ticket created")
+            if mem:
+                try:
+                    stored = mem.remember_ticket(
+                        state["student_id"],
+                        result["ticket"],
+                        str(state["case_result"].get("status", "")),
+                    )
+                    if hasattr(state, "log_memory_event"):
+                        state.log_memory_event(
+                            "write" if stored else "write_skipped",
+                            result["ticket"]["ticket_id"] if stored else "no consent",
+                        )
+                except Exception:
+                    if hasattr(state, "log_memory_event"):
+                        state.log_memory_event("write_failed", "ticket created; history not saved")
 
         return result
 
 
-def run_bounded_agent(student_message):
-    """Run a goal-directed workflow with a strict tool-call limit."""
+def run_bounded_agent(student_message, student_id=None, memory=None):
+    """Run a goal-directed workflow with a strict tool-call limit.
 
-    state = {
-        "checked_case_id": None,
-        "case_result": None,
-        "ticket_created": False,
-    }
+    student_id and memory are supplied by the application after authentication
+    (Week 6). Without them the run behaves exactly as in Week 5.
+    """
+
+    state = SessionState(student_id=student_id)
+    if memory is not None and student_id:
+        try:
+            state.memory_enabled = memory.has_consent(student_id)
+        except Exception:
+            state.memory_enabled = False
 
     trace = []
     history = [student_message]
@@ -256,6 +375,7 @@ def run_bounded_agent(student_message):
     print("\nStudent:", student_message)
 
     for iteration in range(1, MAX_ITERATIONS + 1):
+        state.iteration = iteration
         print(f"\n[ITERATION {iteration}/{MAX_ITERATIONS}]")
 
         response = client.models.generate_content(
@@ -284,10 +404,11 @@ def run_bounded_agent(student_message):
             print("[STOP] No further tool call requested.")
             print("Agent:", final_text)
 
+            state.transition(Phase.RESPONDED, "model gave final answer")
             return {
                 "response": final_text,
                 "trace": trace,
-                "state": state,
+                "state": state.snapshot(),
             }
 
         # The system must act on one tool at a time.
@@ -306,10 +427,11 @@ def run_bounded_agent(student_message):
             print("[STOP] Multiple tool calls rejected.")
             print("Agent:", final_text)
 
+            state.transition(Phase.FAILED, "multiple simultaneous tool calls")
             return {
                 "response": final_text,
                 "trace": trace,
-                "state": state,
+                "state": state.snapshot(),
             }
 
         function_call = function_calls[0]
@@ -324,6 +446,7 @@ def run_bounded_agent(student_message):
             args,
             state,
             student_message,
+            memory,
         )
 
         print("[TOOL RESULT]", json.dumps(result, indent=2))
@@ -367,10 +490,11 @@ def run_bounded_agent(student_message):
     print("\n[STOP] Maximum iteration limit reached.")
     print("Agent:", final_message)
 
+    state.transition(Phase.LIMIT_REACHED, "maximum iterations")
     return {
         "response": final_message,
         "trace": trace,
-        "state": state,
+        "state": state.snapshot(),
     }
 
 
