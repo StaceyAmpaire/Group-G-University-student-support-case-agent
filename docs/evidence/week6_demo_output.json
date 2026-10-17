@@ -10,10 +10,10 @@
     "ticket": "TICKET-1002",
     "stored_records": [
       {
-        "ticket_id": "TICKET-1002",
         "case_id": "CASE-1045",
-        "category": "registration",
         "case_status": "in_progress",
+        "category": "registration",
+        "ticket_id": "TICKET-1002",
         "created_at": "2026-10-05T09:00:00+00:00",
         "expires_at": "2027-01-03T09:00:00+00:00"
       }
@@ -31,7 +31,7 @@
       }
     ],
     "state": {
-      "session_id": "e9758848163a",
+      "session_id": "881077dcf3c5",
       "student_ref": "stu_0066c508d4",
       "memory_enabled": true,
       "phase": "responded",
@@ -80,10 +80,10 @@
       "advisory_only": true,
       "prior_tickets": [
         {
-          "ticket_id": "TICKET-1002",
           "case_id": "CASE-1045",
-          "category": "registration",
           "case_status": "in_progress",
+          "category": "registration",
+          "ticket_id": "TICKET-1002",
           "created_at": "2026-10-05T09:00:00+00:00",
           "expires_at": "2027-01-03T09:00:00+00:00"
         }
@@ -104,10 +104,10 @@
       "error": "duplicate_ticket_warning",
       "source": "saved_ticket_history",
       "prior_ticket": {
-        "ticket_id": "TICKET-1002",
         "case_id": "CASE-1045",
-        "category": "registration",
         "case_status": "in_progress",
+        "category": "registration",
+        "ticket_id": "TICKET-1002",
         "created_at": "2026-10-05T09:00:00+00:00",
         "expires_at": "2027-01-03T09:00:00+00:00"
       },
@@ -140,22 +140,23 @@
       "consent": true,
       "records": [
         {
-          "ticket_id": "TICKET-1003",
           "case_id": "CASE-1045",
-          "category": "registration",
           "case_status": "in_progress",
+          "category": "registration",
+          "ticket_id": "TICKET-1003",
           "created_at": "2026-10-07T09:00:00+00:00",
           "expires_at": "2027-01-05T09:00:00+00:00"
         },
         {
-          "ticket_id": "TICKET-1002",
           "case_id": "CASE-1045",
-          "category": "registration",
           "case_status": "in_progress",
+          "category": "registration",
+          "ticket_id": "TICKET-1002",
           "created_at": "2026-10-05T09:00:00+00:00",
           "expires_at": "2027-01-03T09:00:00+00:00"
         }
-      ]
+      ],
+      "active_case": null
     }
   },
   {
@@ -176,67 +177,61 @@
         "at": "2026-10-05T09:00:00+00:00",
         "actor": "agent",
         "action": "read",
-        "detail": "case=CASE-1045 n=0"
+        "detail": "kind=ticket_history n=0"
       },
       {
         "at": "2026-10-05T09:00:00+00:00",
         "actor": "agent",
         "action": "read",
-        "detail": "case=CASE-1045 n=0"
+        "detail": "kind=duplicate_check found=no"
       },
       {
         "at": "2026-10-05T09:00:00+00:00",
         "actor": "agent",
         "action": "write",
-        "detail": "kind=ticket_history ticket=TICKET-1002"
+        "detail": "kind=ticket_history"
       },
       {
         "at": "2026-10-05T09:00:00+00:00",
         "actor": "agent",
         "action": "read",
-        "detail": "case=* n=1"
+        "detail": "kind=ticket_history n=1"
       },
       {
         "at": "2026-10-07T09:00:00+00:00",
         "actor": "agent",
         "action": "read",
-        "detail": "case=CASE-1045 n=1"
+        "detail": "kind=ticket_history n=1"
       },
       {
         "at": "2026-10-07T09:00:00+00:00",
         "actor": "agent",
         "action": "read",
-        "detail": "case=CASE-1045 n=1"
+        "detail": "kind=ticket_history n=1"
       },
       {
         "at": "2026-10-07T09:00:00+00:00",
         "actor": "agent",
         "action": "read",
-        "detail": "case=CASE-1045 n=1"
+        "detail": "kind=duplicate_check found=yes"
       },
       {
         "at": "2026-10-07T09:00:00+00:00",
         "actor": "agent",
         "action": "read",
-        "detail": "case=CASE-1045 n=1"
+        "detail": "kind=ticket_history n=1"
       },
       {
         "at": "2026-10-07T09:00:00+00:00",
         "actor": "agent",
         "action": "read",
-        "detail": "case=CASE-1045 n=1"
+        "detail": "kind=duplicate_check found=yes"
       },
       {
         "at": "2026-10-07T09:00:00+00:00",
         "actor": "agent",
         "action": "write",
-        "detail": "kind=ticket_history ticket=TICKET-1003"
-      },
-      {
-        "at": "2026-10-07T09:00:00+00:00",
-        "actor": "student",
-        "action": "read",
-        "detail": "case=* n=2"
+        "detail": "kind=ticket_history"
       },
       {
         "at": "2026-10-07T09:00:00+00:00",
@@ -254,7 +249,7 @@
         "at": "2026-10-07T09:00:00+00:00",
         "actor": "agent",
         "action": "read",
-        "detail": "case=* n=0"
+        "detail": "kind=ticket_history n=0"
       }
     ]
   },
