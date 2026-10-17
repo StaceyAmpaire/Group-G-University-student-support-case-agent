@@ -65,6 +65,15 @@ SYNTHETIC_CASES = {
 }
 
 
+# Synthetic ownership map (Week 6). In production this comes from the student
+# information system after authentication. It is NOT returned to the model.
+CASE_OWNERS = {
+    "CASE-1045": "STU-2026-001",
+    "CASE-2031": "STU-2026-002",
+    "CASE-3312": "STU-2026-003",
+}
+
+
 # ============================================================
 # SIMULATED TICKET STORE
 # ============================================================
