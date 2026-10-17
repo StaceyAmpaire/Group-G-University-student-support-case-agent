@@ -492,6 +492,15 @@ def _load_memory(state: ConversationState, memory: Optional[MemoryStore]) -> Non
         state.history.append({"role": "user", "text": note})
 
 
+def _status_in_trace(turn_trace: list[dict], case_id: str) -> Optional[str]:
+    """The status of this case as returned by get_case_status earlier in this turn."""
+    for entry in reversed(turn_trace):
+        result = entry["result"]
+        if entry["tool"] == "get_case_status" and result.get("success") and result.get("case_id") == case_id:
+            return result.get("status")
+    return None
+
+
 def _save_memory(state: ConversationState, memory: Optional[MemoryStore], turn_trace: list[dict]) -> None:
     """Save from tool results only (trusted data), never from model text."""
     if memory is None or not state.student_id:
@@ -500,9 +509,8 @@ def _save_memory(state: ConversationState, memory: Optional[MemoryStore], turn_t
         for entry in reversed(turn_trace):
             if entry["tool"] == "create_support_ticket" and entry["result"].get("success"):
                 ticket = entry["result"]["ticket"]
-                memory.remember_ticket(
-                    state.student_id, ticket["ticket_id"], ticket["case_id"], ticket["category"]
-                )
+                memory.remember_ticket(state.student_id, ticket, _status_in_trace(turn_trace, ticket["case_id"]))
+                memory.remember_case(state.student_id, ticket["case_id"])
                 return
         for entry in reversed(turn_trace):
             if entry["tool"] == "get_case_status" and entry["result"].get("success"):

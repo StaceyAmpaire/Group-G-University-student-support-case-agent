@@ -238,8 +238,8 @@ class SpyMemory:
     def remember_case(self, student_id, case_id):
         self.calls.append(("remember_case", student_id, case_id))
 
-    def remember_ticket(self, student_id, ticket_id, case_id, category):
-        self.calls.append(("remember_ticket", student_id, ticket_id, case_id, category))
+    def remember_ticket(self, student_id, ticket, case_status=None):
+        self.calls.append(("remember_ticket", student_id, ticket["ticket_id"], case_status))
 
     def find_recent_ticket(self, student_id, case_id):
         self.calls.append(("find_recent_ticket", student_id, case_id))
@@ -301,6 +301,7 @@ class MemoryIntegrationTests(unittest.TestCase):
         record = self.memory.recall("stu-1")
         self.assertTrue(record["tickets"][0]["ticket_id"].startswith("TICKET-"))
         self.assertEqual(record["tickets"][0]["category"], "registration")
+        self.assertEqual(record["tickets"][0]["case_status"], "in_progress")  # status when it was opened
         self.assertEqual(record["active_case_id"], "CASE-1045")
 
     def test_nothing_is_saved_or_read_without_a_student_id(self):
@@ -380,12 +381,14 @@ class MemoryIntegrationTests(unittest.TestCase):
         self.turn("status of CASE-2031", [model], student_id="stu-no-consent")
         self.assertEqual(notes_in(model.seen_histories[0]), [])
         self.assertIsNone(self.memory.recall("stu-no-consent"))
-        self.assertEqual(self.memory.export_all("stu-no-consent")["ticket_history"], [])
+        self.assertEqual(self.memory.export_all("stu-no-consent")["records"], [])
 
     # --- duplicate-ticket warning ------------------------------------------------------
 
     def remembered_ticket(self):
-        self.memory.remember_ticket("stu-1", "TICKET-1001", "CASE-1045", "registration")
+        self.memory.remember_ticket(
+            "stu-1", {"ticket_id": "TICKET-1001", "case_id": "CASE-1045", "category": "registration"}, "in_progress"
+        )
         return call("create_support_ticket", case_id="CASE-1045", category="registration", description="x")
 
     def test_duplicate_is_held_back_once_then_the_student_can_proceed(self):
@@ -410,7 +413,9 @@ class MemoryIntegrationTests(unittest.TestCase):
         self.assertEqual(len(tools.TICKET_STORE), 0)
 
     def test_a_ticket_on_a_different_case_is_not_held_back(self):
-        self.memory.remember_ticket("stu-1", "TICKET-1001", "CASE-2031", "fees")
+        self.memory.remember_ticket(
+            "stu-1", {"ticket_id": "TICKET-1001", "case_id": "CASE-2031", "category": "fees"}, "resolved"
+        )
         ticket = call("create_support_ticket", case_id="CASE-1045", category="registration", description="x")
         model = Scripted("groq", [use(ticket), say("Opened.")])
         self.turn("open a ticket for CASE-1045", [model])
