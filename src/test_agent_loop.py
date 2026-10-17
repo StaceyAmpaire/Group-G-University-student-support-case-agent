@@ -7,12 +7,17 @@ Run from src/:   python -m unittest test_agent_loop -v
 
 import copy
 import logging
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 
 import agent_loop
 import tools
-from agent_loop import ModelResponse, ToolRequest, _run_turn
+from agent_loop import ModelResponse, ToolRequest, _case_ids_in, _run_turn
+from memory import MemoryStore
+
+PEPPER = "test-pepper-0123456789"
 
 logging.getLogger("agent_loop").setLevel(logging.CRITICAL)  # keep expected failures quiet
 
@@ -97,8 +102,8 @@ class LoopTests(unittest.TestCase):
     def test_one_ticket_per_conversation(self):
         ticket = call("create_support_ticket", case_id="CASE-1045", category="registration", description="x")
         model = Scripted("groq", [use(ticket), say("Done."), use(ticket), say("Already have one.")])
-        self.turn("first", [model])
-        second = self.turn("second", [model])
+        self.turn("first ticket for CASE-1045", [model])
+        second = self.turn("second ticket for CASE-1045", [model])
         self.assertEqual(len(tools.TICKET_STORE), 1)
         blocked = [e for e in second["tool_trace"] if e["tool"] == "create_support_ticket"][0]
         self.assertTrue(blocked["result"]["blocked"])
@@ -166,8 +171,8 @@ class LoopTests(unittest.TestCase):
         fallback = Scripted("gemini", [use(ticket), say("A ticket already exists.")])
         providers = [primary, fallback]
 
-        self.turn("open a ticket", providers)
-        second = self.turn("open another ticket", providers)
+        self.turn("open a ticket for CASE-1045", providers)
+        second = self.turn("open another ticket for CASE-1045", providers)
 
         self.assertTrue(second["fallback_used"])
         self.assertEqual(second["model_used"], "gemini")
@@ -218,6 +223,216 @@ class LoopTests(unittest.TestCase):
             _run_turn("  ", self.conv, None, [])
         with self.assertRaises(ValueError):
             _run_turn("hello", "", None, [])
+
+
+class SpyMemory:
+    """Records calls so tests can prove memory was (or was not) touched."""
+
+    def __init__(self):
+        self.calls = []
+
+    def recall(self, student_id):
+        self.calls.append(("recall", student_id))
+        return None
+
+    def remember_case(self, student_id, case_id):
+        self.calls.append(("remember_case", student_id, case_id))
+
+    def remember_ticket(self, student_id, ticket_id, case_id, category):
+        self.calls.append(("remember_ticket", student_id, ticket_id, case_id, category))
+
+    def find_recent_ticket(self, student_id, case_id):
+        self.calls.append(("find_recent_ticket", student_id, case_id))
+        return None
+
+
+class BrokenMemory:
+    def recall(self, student_id):
+        raise RuntimeError("disk error")
+
+    def remember_case(self, *args):
+        raise RuntimeError("disk error")
+
+    def remember_ticket(self, *args):
+        raise RuntimeError("disk error")
+
+    def find_recent_ticket(self, *args):
+        raise RuntimeError("disk error")
+
+
+def notes_in(history):
+    return [m for m in history if m["role"] == "user" and m["text"].startswith("[Application note]")]
+
+
+class MemoryIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        tools.TICKET_STORE.clear()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / "memory.db"
+        self.memory = MemoryStore(self.path, pepper=PEPPER)
+        self.memory.grant_consent("stu-1")  # the application records the student's opt-in
+        self.conv = f"conv-{self.id()}"
+        agent_loop.reset_conversation(self.conv)
+        agent_loop.reset_conversation(self.conv + "-b")
+
+    def turn(self, message, providers, student_id="stu-1", conv=None, memory="store"):
+        memory = self.memory if memory == "store" else memory
+        return _run_turn(message, conv or self.conv, student_id, providers, memory=memory)
+
+    # --- saving ------------------------------------------------------------
+
+    def test_successful_lookup_is_saved(self):
+        model = Scripted("groq", [use(call("get_case_status", case_id="CASE-2031")), say("Resolved.")])
+        self.turn("status of CASE-2031", [model])
+        self.assertEqual(self.memory.recall("stu-1")["active_case_id"], "CASE-2031")
+
+    def test_not_found_lookup_is_not_saved(self):
+        model = Scripted("groq", [use(call("get_case_status", case_id="CASE-9999")), say("Not found.")])
+        self.turn("status of CASE-9999", [model])
+        self.assertIsNone(self.memory.recall("stu-1"))
+
+    def test_ticket_is_saved(self):
+        model = Scripted("groq", [
+            use(call("create_support_ticket", case_id="CASE-1045", category="registration", description="x")),
+            say("Ticket opened."),
+        ])
+        self.turn("open a ticket for CASE-1045", [model])
+        record = self.memory.recall("stu-1")
+        self.assertTrue(record["tickets"][0]["ticket_id"].startswith("TICKET-"))
+        self.assertEqual(record["tickets"][0]["category"], "registration")
+        self.assertEqual(record["active_case_id"], "CASE-1045")
+
+    def test_nothing_is_saved_or_read_without_a_student_id(self):
+        spy = SpyMemory()
+        model = Scripted("groq", [use(call("get_case_status", case_id="CASE-2031")), say("Resolved.")])
+        self.turn("status of CASE-2031", [model], student_id=None, memory=spy)
+        self.assertEqual(spy.calls, [])
+
+    def test_memory_only_stores_what_the_policy_allows(self):
+        model = Scripted("groq", [use(call("get_case_status", case_id="CASE-1045")), say("In progress.")])
+        self.turn("status of CASE-1045. My name is Grace and my number is 0700000000", [model])
+        record = self.memory.recall("stu-1")
+        self.assertEqual(record["tickets"], [])
+        self.assertEqual(record["active_case_id"], "CASE-1045")
+        import sqlite3
+        conn = sqlite3.connect(self.path)
+        try:
+            tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+            text = " ".join(str(v) for t in tables for row in conn.execute(f"SELECT * FROM {t}") for v in row)
+        finally:
+            conn.close()
+        self.assertNotIn("Grace", text)
+        self.assertNotIn("0700000000", text)
+
+    # --- using memory in a later conversation --------------------------------
+
+    def test_note_reaches_the_model_once_and_survives_a_restart(self):
+        self.memory.remember_case("stu-1", "CASE-1045")
+        restarted = MemoryStore(self.path, pepper=PEPPER)  # a new process would open the same file
+        model = Scripted("groq", [say("Hello."), say("Hello again.")])
+        self.turn("hi", [model], memory=restarted)
+        self.turn("hi again", [model], memory=restarted)
+        first_note = notes_in(model.seen_histories[0])
+        self.assertEqual(len(first_note), 1)
+        self.assertIn("CASE-1045", first_note[0]["text"])
+        self.assertEqual(len(notes_in(model.seen_histories[1])), 1)  # not repeated
+
+    def test_no_note_when_nothing_is_remembered(self):
+        model = Scripted("groq", [say("Hello.")])
+        self.turn("hi", [model])
+        self.assertEqual(notes_in(model.seen_histories[0]), [])
+
+    def test_remembered_case_can_be_looked_up_read_only(self):
+        self.memory.remember_case("stu-1", "CASE-1045")
+        model = Scripted("groq", [use(call("get_case_status", case_id="CASE-1045")), say("It is in progress.")])
+        result = self.turn("what is the status of my case?", [model])
+        self.assertTrue(result["tool_trace"][0]["result"]["success"])
+        self.assertEqual(result["tool_trace"][0]["result"]["status"], "in_progress")  # fresh, not from memory
+
+    def test_remembered_case_cannot_open_a_ticket_until_the_student_gives_the_id(self):
+        self.memory.remember_case("stu-1", "CASE-1045")
+        ticket = call("create_support_ticket", case_id="CASE-1045", category="registration", description="x")
+        model = Scripted("groq", [
+            use(ticket), say("Please confirm the case ID."),
+            use(ticket), say("Ticket opened."),
+        ])
+        first = self.turn("please open a ticket for my case", [model])
+        self.assertEqual(len(tools.TICKET_STORE), 0)
+        self.assertIn("has not given", first["tool_trace"][0]["result"]["error"])
+        self.assertEqual(first["outcome"], "needs_student_input")
+
+        second = self.turn("It is CASE-1045", [model])
+        self.assertEqual(len(tools.TICKET_STORE), 1)
+        self.assertEqual(second["outcome"], "goal_reached")
+
+    def test_forget_removes_what_the_next_conversation_sees(self):
+        self.memory.remember_case("stu-1", "CASE-1045")
+        self.assertTrue(self.memory.forget("stu-1"))
+        model = Scripted("groq", [say("Hello.")])
+        self.turn("hi", [model], conv=self.conv + "-b")
+        self.assertEqual(notes_in(model.seen_histories[0]), [])
+
+    # --- consent -------------------------------------------------------------------
+
+    def test_without_consent_nothing_is_saved_and_no_note_is_given(self):
+        model = Scripted("groq", [use(call("get_case_status", case_id="CASE-2031")), say("Resolved.")])
+        self.turn("status of CASE-2031", [model], student_id="stu-no-consent")
+        self.assertEqual(notes_in(model.seen_histories[0]), [])
+        self.assertIsNone(self.memory.recall("stu-no-consent"))
+        self.assertEqual(self.memory.export_all("stu-no-consent")["ticket_history"], [])
+
+    # --- duplicate-ticket warning ------------------------------------------------------
+
+    def remembered_ticket(self):
+        self.memory.remember_ticket("stu-1", "TICKET-1001", "CASE-1045", "registration")
+        return call("create_support_ticket", case_id="CASE-1045", category="registration", description="x")
+
+    def test_duplicate_is_held_back_once_then_the_student_can_proceed(self):
+        ticket = self.remembered_ticket()
+        model = Scripted("groq", [
+            use(ticket), say("You opened TICKET-1001 on CASE-1045 earlier. Do you want another?"),
+            use(ticket), say("Done, I've opened another ticket."),
+        ])
+        first = self.turn("please open a ticket for CASE-1045", [model])
+        self.assertEqual(len(tools.TICKET_STORE), 0)
+        self.assertIn("TICKET-1001", first["tool_trace"][-1]["result"]["error"])
+        self.assertEqual(first["outcome"], "needs_student_input")
+
+        second = self.turn("Yes, please open another one for CASE-1045", [model])
+        self.assertEqual(len(tools.TICKET_STORE), 1)  # memory advised; the student decided
+        self.assertEqual(second["outcome"], "goal_reached")
+
+    def test_duplicate_retry_in_the_same_turn_stays_blocked(self):
+        ticket = self.remembered_ticket()
+        model = Scripted("groq", [use(ticket), use(ticket), say("Please confirm you want another ticket.")])
+        self.turn("open a ticket for CASE-1045", [model])
+        self.assertEqual(len(tools.TICKET_STORE), 0)
+
+    def test_a_ticket_on_a_different_case_is_not_held_back(self):
+        self.memory.remember_ticket("stu-1", "TICKET-1001", "CASE-2031", "fees")
+        ticket = call("create_support_ticket", case_id="CASE-1045", category="registration", description="x")
+        model = Scripted("groq", [use(ticket), say("Opened.")])
+        self.turn("open a ticket for CASE-1045", [model])
+        self.assertEqual(len(tools.TICKET_STORE), 1)
+
+    # --- failure isolation ------------------------------------------------------
+
+    def test_broken_memory_does_not_break_a_turn(self):
+        ticket = call("create_support_ticket", case_id="CASE-1045", category="registration", description="x")
+        model = Scripted("groq", [use(ticket), say("Ticket opened.")])
+        result = self.turn("open a ticket for CASE-1045", [model], memory=BrokenMemory())
+        self.assertEqual(result["outcome"], "goal_reached")
+        self.assertEqual(len(tools.TICKET_STORE), 1)
+
+
+class CaseReferenceTests(unittest.TestCase):
+    def test_references_are_normalised(self):
+        self.assertEqual(_case_ids_in("case 1045, CASE-2031 and case#3312"),
+                         {"CASE-1045", "CASE-2031", "CASE-3312"})
+
+    def test_words_that_merely_contain_case_do_not_match(self):
+        self.assertEqual(_case_ids_in("my briefcase 5 and showcase 12"), set())
 
 
 class AdapterTests(unittest.TestCase):

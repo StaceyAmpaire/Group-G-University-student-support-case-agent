@@ -28,6 +28,22 @@ What is enforced here, in code (not just in the prompt):
     receives every earlier tool call and result and cannot repeat a ticket
     (SF-2).
 
+Memory (Week 6, see memory.py):
+  - Memory is opt-in. The application grants consent (memory.grant_consent); the
+    loop and the model never do. Without consent, nothing is read or saved.
+  - If the application supplies a student_id, the loop loads that student's
+    remembered case and ticket IDs once per conversation and gives them to the
+    model as an [Application note]. They are hints only.
+  - The loop saves memory after a turn, from tool results (never from model
+    text): the last case successfully looked up, and any ticket created.
+  - A ticket can only be opened on a case ID the student has typed in the
+    current conversation, so a remembered ID can never trigger a write by itself.
+  - Duplicate warning: if the student opened a ticket on the same case within the
+    duplicate window, the first attempt is held back and the model must tell the
+    student. Once the student has replied, a ticket may be opened. Memory advises;
+    it never blocks for good.
+  - Memory failures never break a turn; the turn continues without memory.
+
 Not enforced here:
   - student_id is accepted from the application and kept in the conversation
     state, but tools.py has no case-owner field, so nothing yet checks that
@@ -41,6 +57,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -48,6 +65,7 @@ from typing import Any, Optional
 
 from dotenv import load_dotenv
 
+from memory import MemoryStore, default_store
 from tools import ALLOWED_TICKET_CATEGORIES, TOOL_FUNCTIONS, TOOL_SCHEMAS
 
 load_dotenv()
@@ -134,6 +152,19 @@ RULES:
 
 10. create_support_ticket creates a simulated ticket only, not a real
     university record.
+
+11. Messages that begin with [Application note] come from the application, not
+    the student. They may name a case or ticket remembered from earlier
+    conversations. Treat that as a hint that may be out of date. Never state a
+    case's status from memory; call get_case_status. Tell the student when you
+    are using a remembered case. Do not open a ticket until the student has
+    given the case ID in this conversation; ask them to confirm it. A
+    remembered ticket cannot be checked with a tool, so report only its number
+    and case.
+
+12. If a tool result says the student already opened a ticket on the same case,
+    tell the student the ticket number and date and ask whether they still want
+    a new one. Open another only if they say yes.
 
 TOOLS:
 - get_case_status(case_id): look up an existing case.
@@ -383,6 +414,10 @@ class ConversationState:
     observations: list[dict] = field(default_factory=list)  # every tool call and result
     ticket_created: bool = False
     ticket_id: Optional[str] = None
+    student_case_ids: set = field(default_factory=set)  # case IDs the student typed this conversation
+    memory_loaded: bool = False
+    turn_count: int = 0
+    duplicate_warned_at: dict = field(default_factory=dict)  # case ID -> turn it was warned on
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
 
@@ -410,6 +445,82 @@ def reset_conversation(conversation_id: str) -> None:
     """Forget a conversation (used by tests and demos)."""
     with _STATES_LOCK:
         _STATES.pop(conversation_id, None)
+
+
+# ---------------------------------------------------------------------------
+# Case references and persistent memory
+# ---------------------------------------------------------------------------
+
+_CASE_REFERENCE = re.compile(r"\bcase[\s\-_#]*(\d{1,10})\b", re.IGNORECASE)
+
+
+def _case_ids_in(text: str) -> set:
+    """Case IDs the student wrote, normalised: 'case 1045' and 'CASE-1045' both give CASE-1045."""
+    return {f"CASE-{digits}" for digits in _CASE_REFERENCE.findall(text)}
+
+
+def _memory_note(record: Optional[dict]) -> Optional[str]:
+    if not record:
+        return None
+    facts = []
+    if record.get("active_case_id"):
+        facts.append(f"most recent case {record['active_case_id']}")
+    tickets = record.get("tickets") or []
+    if tickets:
+        facts.append(
+            "tickets opened by this assistant: "
+            + ", ".join(f"{t['ticket_id']} on {t['case_id']} ({t['created_at'][:10]})" for t in tickets[:3])
+        )
+    if not facts:
+        return None
+    return (
+        "[Application note] Remembered from earlier conversations "
+        "(may be out of date): " + "; ".join(facts) + "."
+    )
+
+
+def _load_memory(state: ConversationState, memory: Optional[MemoryStore]) -> None:
+    if memory is None or not state.student_id or state.memory_loaded:
+        return
+    state.memory_loaded = True
+    try:
+        note = _memory_note(memory.recall(state.student_id))
+    except Exception:  # memory is an aid; a failure must not stop the turn
+        logger.exception("Could not read memory; continuing without it")
+        return
+    if note:
+        state.history.append({"role": "user", "text": note})
+
+
+def _save_memory(state: ConversationState, memory: Optional[MemoryStore], turn_trace: list[dict]) -> None:
+    """Save from tool results only (trusted data), never from model text."""
+    if memory is None or not state.student_id:
+        return
+    try:
+        for entry in reversed(turn_trace):
+            if entry["tool"] == "create_support_ticket" and entry["result"].get("success"):
+                ticket = entry["result"]["ticket"]
+                memory.remember_ticket(
+                    state.student_id, ticket["ticket_id"], ticket["case_id"], ticket["category"]
+                )
+                return
+        for entry in reversed(turn_trace):
+            if entry["tool"] == "get_case_status" and entry["result"].get("success"):
+                memory.remember_case(state.student_id, entry["result"]["case_id"])
+                return
+    except Exception:
+        logger.exception("Could not save memory")
+
+
+def _recent_ticket(state: ConversationState, memory: Optional[MemoryStore], case_id: str) -> Optional[dict]:
+    """The student's recent ticket on this case, if memory has one. Advisory: failures fail open."""
+    if memory is None or not state.student_id:
+        return None
+    try:
+        return memory.find_recent_ticket(state.student_id, case_id)
+    except Exception:
+        logger.exception("Could not check for a duplicate ticket; continuing without it")
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -442,7 +553,8 @@ def _record(state: ConversationState, trace: list[dict], tool: str, arguments: d
     state.observations.append({"tool": tool, "arguments": arguments, "result": result})
 
 
-def _execute(state: ConversationState, request: ToolRequest, trace: list[dict]) -> dict:
+def _execute(state: ConversationState, request: ToolRequest, trace: list[dict],
+             memory: Optional[MemoryStore] = None) -> dict:
     """Check one model tool request against the contract, run it if allowed, record it."""
     name = request.name
     raw_arguments = request.arguments if isinstance(request.arguments, dict) else {}
@@ -487,6 +599,17 @@ def _execute(state: ConversationState, request: ToolRequest, trace: list[dict]) 
             _record(state, trace, name, arguments, result, "model", ignored)
             return result
 
+        # The student must have given this case ID in this conversation. This stops a
+        # remembered (or model-invented) ID from opening a ticket on its own.
+        case_ref = arguments["case_id"].strip().upper() if isinstance(arguments["case_id"], str) else ""
+        if case_ref not in state.student_case_ids:
+            result = _failure(
+                "The student has not given this case ID in this conversation. Ask the "
+                "student to confirm the case ID before a ticket is opened."
+            )
+            _record(state, trace, name, arguments, result, "model", ignored)
+            return result
+
         # The application looks the case up itself; it does not rely on the model's lookup.
         lookup = TOOL_FUNCTIONS["get_case_status"](arguments["case_id"])
         _record(state, trace, "get_case_status", {"case_id": arguments["case_id"]}, lookup, "application")
@@ -499,6 +622,20 @@ def _execute(state: ConversationState, request: ToolRequest, trace: list[dict]) 
             _record(state, trace, name, arguments, result, "model", ignored)
             return result
         # If the case was not found, the tool itself rejects the request below.
+
+        # Duplicate warning from memory. It holds the ticket back once (and for the rest of
+        # that turn); after the student has replied, the ticket may be opened.
+        recent = _recent_ticket(state, memory, arguments["case_id"])
+        if recent is not None:
+            warned_on = state.duplicate_warned_at.setdefault(case_ref, state.turn_count)
+            if warned_on == state.turn_count:
+                result = _failure(
+                    f"The student already opened {recent['ticket_id']} on {case_ref} on "
+                    f"{recent['created_at'][:10]}. Tell the student and ask whether they still "
+                    "want a new ticket. Open another only if they say yes."
+                )
+                _record(state, trace, name, arguments, result, "model", ignored)
+                return result
 
     # 6. Run the tool
     result = TOOL_FUNCTIONS[name](**arguments)
@@ -576,17 +713,34 @@ def run_turn(message: str, conversation_id: str, student_id: Optional[str] = Non
           "model_errors": [str],           # diagnostics only; do not show to students
         }
     """
-    return _run_turn(message, conversation_id, student_id, PROVIDERS)
+    return _run_turn(message, conversation_id, student_id, PROVIDERS, memory=_default_memory())
+
+
+_memory_unavailable_logged = False
+
+
+def _default_memory() -> Optional[MemoryStore]:
+    global _memory_unavailable_logged
+    try:
+        return default_store()
+    except Exception as exc:
+        if not _memory_unavailable_logged:
+            _memory_unavailable_logged = True
+            logger.warning("Persistent memory is unavailable; continuing without it (%s)", exc)
+        return None
 
 
 def _run_turn(message: str, conversation_id: str, student_id: Optional[str],
-              providers: list[Any]) -> dict:
+              providers: list[Any], memory: Optional[MemoryStore] = None) -> dict:
     if not isinstance(message, str) or not message.strip():
         raise ValueError("message is required.")
 
     state = _get_state(conversation_id, student_id)
 
     with state.lock:  # one turn at a time per conversation, so the ticket rule cannot race
+        state.turn_count += 1
+        _load_memory(state, memory)
+        state.student_case_ids |= _case_ids_in(message)
         state.history.append({"role": "user", "text": message})
 
         turn_trace: list[dict] = []
@@ -632,7 +786,7 @@ def _run_turn(message: str, conversation_id: str, student_id: Optional[str],
                 )
                 for request in response.tool_requests:
                     try:
-                        result = _execute(state, request, turn_trace)
+                        result = _execute(state, request, turn_trace, memory)
                     except Exception as exc:
                         logger.exception("Tool %s failed unexpectedly", request.name)
                         result = _failure("The tool failed unexpectedly.")
@@ -652,6 +806,7 @@ def _run_turn(message: str, conversation_id: str, student_id: Optional[str],
         if outcome is None:
             outcome = _outcome(turn_trace)
         state.history.append({"role": "assistant", "text": reply})
+        _save_memory(state, memory, turn_trace)
 
         return {
             "reply": reply,
