@@ -5,3 +5,4 @@ __pycache__/
 # Week 6: local memory database
 data/
 *.db
+screenshots
