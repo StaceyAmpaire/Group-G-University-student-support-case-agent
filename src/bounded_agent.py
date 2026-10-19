@@ -2,23 +2,39 @@ from pathlib import Path
 import os
 import json
 import re
+import time
+from dataclasses import dataclass
 
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-from tools import get_case_status, create_support_ticket, CASE_OWNERS
+from tools import get_case_status, create_support_ticket, CASE_OWNERS, TOOL_SCHEMAS
 from state import SessionState, Phase, advance
 from memory import MemoryStore, MemoryUnavailable
 
 
 load_dotenv()
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+def _make_gemini_client():
+    """Create the Gemini client, or None if no key is configured.
 
-MODEL = "gemini-3.7-flash"
+    A missing key must not stop the whole module from loading: Groq is the
+    primary model and may still work. GeminiProvider reports the missing key
+    as a provider failure instead.
+    """
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return None
+    return genai.Client(api_key=api_key)
+
+
+client = _make_gemini_client()
+
+# Groq is the primary model; Gemini is the fallback (Agent Task Contract s5).
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
+MODEL = GEMINI_MODEL  # kept so older code that reads agent.MODEL still works
 MAX_ITERATIONS = 3
 
 ALLOWED_TOOLS = {
@@ -74,6 +90,9 @@ WORKFLOW:
 - If a tool result says a duplicate-ticket warning was raised, tell
   the student which earlier ticket exists and ask whether they still
   want another one. Do not retry the tool yourself.
+- Lines that begin with "[Earlier tool call" are genuine application
+  tool results from earlier in this same request. Treat them exactly
+  like any other tool result and do not repeat those calls.
 """
 
 
@@ -355,12 +374,271 @@ def execute_tool(name, args, state, student_message, memory=None):
         return result
 
 
-def run_bounded_agent(student_message, student_id=None, memory=None):
+# ============================================================
+# MODEL PROVIDERS (Groq primary, Gemini fallback)
+# ============================================================
+#
+# The conversation is kept in a provider-neutral history so that, if the
+# primary model fails part-way through a run, the fallback receives every
+# earlier tool call and tool result and cannot, for example, create a second
+# ticket. The same allow-list, validation, authorization and iteration limit
+# apply whichever model is answering: the models only propose actions.
+
+SAFE_FAILURE_MESSAGE = (
+    "I'm sorry, I can't complete that right now. "
+    "Please try again in a few minutes."
+)
+
+# Argument names each tool accepts, taken from the tool schemas in tools.py.
+ALLOWED_ARGUMENTS = {
+    schema["name"]: set(schema["parameters"]["properties"])
+    for schema in TOOL_SCHEMAS
+}
+
+GROQ_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": schema["name"],
+            "description": schema["description"],
+            "parameters": schema["parameters"],
+        },
+    }
+    for schema in TOOL_SCHEMAS
+]
+
+
+class ProviderError(Exception):
+    """A model provider could not be used (missing key, missing package...)."""
+
+
+class AllProvidersFailed(Exception):
+    """Primary and fallback models both failed for the same request."""
+
+
+@dataclass
+class ToolRequest:
+    name: str
+    args: dict
+    id: str = None
+
+
+@dataclass
+class ModelResponse:
+    text: str
+    tool_calls: list
+    native: object = None   # provider-specific content, replayed only to its own provider
+
+
+def history_to_groq_messages(history):
+    """Neutral history -> OpenAI-style messages used by Groq."""
+    messages = []
+    for entry in history:
+        if entry["type"] == "user":
+            messages.append({"role": "user", "content": entry["text"]})
+        elif entry["type"] == "tool_call":
+            messages.append({
+                "role": "assistant",
+                "tool_calls": [{
+                    "id": entry["id"],
+                    "type": "function",
+                    "function": {
+                        "name": entry["name"],
+                        "arguments": json.dumps(entry["args"], default=str),
+                    },
+                }],
+            })
+        elif entry["type"] == "tool_result":
+            messages.append({
+                "role": "tool",
+                "tool_call_id": entry["id"],
+                "content": json.dumps(entry["result"], default=str),
+            })
+    return messages
+
+
+def history_to_gemini_contents(history):
+    """Neutral history -> Gemini contents.
+
+    Tool calls made by Gemini itself are replayed natively (this keeps any
+    provider-specific data Gemini needs). Tool calls made by another model are
+    replayed as plain text, so Gemini sees what already happened without being
+    handed function-call parts it did not produce.
+    """
+    contents = []
+    pending_text = []
+    native_ids = set()
+    other_calls = {}
+
+    def flush():
+        if pending_text:
+            contents.append("\n\n".join(pending_text))
+            pending_text.clear()
+
+    for entry in history:
+        if entry["type"] == "user":
+            pending_text.append(entry["text"])
+        elif entry["type"] == "tool_call":
+            if entry.get("provider") == "gemini" and entry.get("native") is not None:
+                flush()
+                contents.append(entry["native"])
+                native_ids.add(entry["id"])
+            else:
+                other_calls[entry["id"]] = entry
+        elif entry["type"] == "tool_result":
+            if entry["id"] in native_ids:
+                flush()
+                contents.append(
+                    types.Content(
+                        role="user",
+                        parts=[
+                            types.Part.from_function_response(
+                                name=entry["name"],
+                                response=entry["result"],
+                            )
+                        ],
+                    )
+                )
+            else:
+                call = other_calls.get(entry["id"], {})
+                pending_text.append(
+                    "[Earlier tool call, made before a model switch] "
+                    f"{entry['name']}("
+                    f"{json.dumps(call.get('args', {}), default=str)}) "
+                    f"returned: {json.dumps(entry['result'], default=str)}"
+                )
+    flush()
+    return contents
+
+
+class GroqProvider:
+    name = "groq"
+
+    def __init__(self, client=None, model=None):
+        self._client = client
+        self.model = model or GROQ_MODEL
+
+    def _get_client(self):
+        if self._client is None:
+            api_key = os.getenv("GROQ_API_KEY")
+            if not api_key:
+                raise ProviderError("GROQ_API_KEY is not set")
+            try:
+                from groq import Groq
+            except ImportError as exc:
+                raise ProviderError("the groq package is not installed") from exc
+            self._client = Groq(api_key=api_key)
+        return self._client
+
+    def generate(self, history):
+        messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
+        messages += history_to_groq_messages(history)
+
+        response = self._get_client().chat.completions.create(
+            model=self.model,
+            messages=messages,
+            tools=GROQ_TOOLS,
+            tool_choice="auto",
+        )
+        message = response.choices[0].message
+
+        calls = []
+        for tool_call in (message.tool_calls or []):
+            try:
+                args = json.loads(tool_call.function.arguments or "{}")
+            except json.JSONDecodeError:
+                args = {}   # missing arguments are rejected by execute_tool
+            if not isinstance(args, dict):
+                args = {}
+            calls.append(ToolRequest(tool_call.function.name, args, tool_call.id))
+
+        return ModelResponse(text=message.content or "", tool_calls=calls)
+
+
+class GeminiProvider:
+    name = "gemini"
+
+    def __init__(self, model=None):
+        self.model = model or GEMINI_MODEL
+
+    def generate(self, history):
+        if client is None:
+            raise ProviderError("GEMINI_API_KEY is not set")
+        response = client.models.generate_content(
+            model=self.model,
+            contents=history_to_gemini_contents(history),
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                tools=TOOLS,
+            ),
+        )
+
+        calls = [
+            ToolRequest(call.name, dict(call.args or {}), None)
+            for call in (response.function_calls or [])
+        ]
+        if calls:
+            return ModelResponse(
+                text="",
+                tool_calls=calls,
+                native=response.candidates[0].content,
+            )
+        return ModelResponse(text=response.text or "", tool_calls=[])
+
+
+def default_providers():
+    """Primary first, fallback second."""
+    return [GroqProvider(), GeminiProvider()]
+
+
+def filter_arguments(name, args):
+    """Drop arguments the tool schema does not define (for example a
+    student_id supplied by the model). Returns (kept, dropped_names)."""
+    allowed = ALLOWED_ARGUMENTS.get(name)
+    if allowed is None:
+        return dict(args), []
+    kept = {key: value for key, value in args.items() if key in allowed}
+    dropped = sorted(set(args) - allowed)
+    return kept, dropped
+
+
+def call_model(history, providers, start_index, trace, iteration):
+    """Ask providers in order, starting at start_index.
+
+    Returns (response, provider_index, latency_ms). A provider that fails is
+    logged in the trace and the next one is tried for the same round. The run
+    stays on whichever provider answered, so it does not flip back and forth.
+    """
+    for index in range(start_index, len(providers)):
+        provider = providers[index]
+        started = time.perf_counter()
+        try:
+            response = provider.generate(history)
+        except Exception as exc:
+            trace.append({
+                "iteration": iteration,
+                "event": "provider_failure",
+                "provider": provider.name,
+                "error_type": type(exc).__name__,
+                "detail": str(exc)[:200] if isinstance(exc, ProviderError) else "",
+            })
+            print(f"[MODEL FAILED] {provider.name}: {type(exc).__name__}")
+            continue
+        latency_ms = round((time.perf_counter() - started) * 1000)
+        print(f"[MODEL] {provider.name} ({latency_ms} ms)")
+        return response, index, latency_ms
+    raise AllProvidersFailed()
+
+
+def run_bounded_agent(student_message, student_id=None, memory=None, providers=None):
     """Run a goal-directed workflow with a strict tool-call limit.
 
     student_id and memory are supplied by the application after authentication
-    (Week 6). Without them the run behaves exactly as in Week 5.
+    (Week 6). providers is an ordered list of model providers (primary first);
+    the default is Groq then Gemini.
     """
+
+    providers = providers if providers is not None else default_providers()
 
     state = SessionState(student_id=student_id)
     if memory is not None and student_id:
@@ -370,7 +648,8 @@ def run_bounded_agent(student_message, student_id=None, memory=None):
             state.memory_enabled = False
 
     trace = []
-    history = [student_message]
+    history = [{"type": "user", "text": student_message}]
+    provider_index = 0
 
     print("\nStudent:", student_message)
 
@@ -378,18 +657,30 @@ def run_bounded_agent(student_message, student_id=None, memory=None):
         state.iteration = iteration
         print(f"\n[ITERATION {iteration}/{MAX_ITERATIONS}]")
 
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=history,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                tools=TOOLS,
-            ),
-        )
+        try:
+            response, provider_index, latency_ms = call_model(
+                history, providers, provider_index, trace, iteration
+            )
+        except AllProvidersFailed:
+            trace.append({
+                "iteration": iteration,
+                "event": "stop",
+                "reason": "All model providers failed.",
+            })
+            print("[STOP] All model providers failed.")
+            print("Agent:", SAFE_FAILURE_MESSAGE)
 
-        function_calls = response.function_calls
+            state.transition(Phase.FAILED, "all model providers failed")
+            return {
+                "response": SAFE_FAILURE_MESSAGE,
+                "trace": trace,
+                "state": state.snapshot(),
+            }
 
-        if not function_calls:
+        provider_name = providers[provider_index].name
+        tool_calls = response.tool_calls
+
+        if not tool_calls:
             final_text = response.text or (
                 "I could not produce a final response."
             )
@@ -399,6 +690,8 @@ def run_bounded_agent(student_message, student_id=None, memory=None):
                 "event": "stop",
                 "reason": "The model did not request another tool.",
                 "response": final_text,
+                "provider": provider_name,
+                "latency_ms": latency_ms,
             })
 
             print("[STOP] No further tool call requested.")
@@ -412,7 +705,7 @@ def run_bounded_agent(student_message, student_id=None, memory=None):
             }
 
         # The system must act on one tool at a time.
-        if len(function_calls) > 1:
+        if len(tool_calls) > 1:
             final_text = (
                 "I stopped because the model requested multiple tools "
                 "at once. Please retry the request."
@@ -422,6 +715,7 @@ def run_bounded_agent(student_message, student_id=None, memory=None):
                 "iteration": iteration,
                 "event": "stop",
                 "reason": "Multiple simultaneous tool calls rejected.",
+                "provider": provider_name,
             })
 
             print("[STOP] Multiple tool calls rejected.")
@@ -434,12 +728,15 @@ def run_bounded_agent(student_message, student_id=None, memory=None):
                 "state": state.snapshot(),
             }
 
-        function_call = function_calls[0]
-        name = function_call.name
-        args = dict(function_call.args or {})
+        request = tool_calls[0]
+        name = request.name
+        call_id = request.id or f"call_{iteration}"
+        args, dropped = filter_arguments(name, dict(request.args or {}))
 
         print("[TOOL REQUEST]", name)
-        print("[ARGUMENTS]", json.dumps(args, indent=2))
+        print("[ARGUMENTS]", json.dumps(args, indent=2, default=str))
+        if dropped:
+            print("[DROPPED ARGUMENTS]", dropped)
 
         result = execute_tool(
             name,
@@ -449,31 +746,37 @@ def run_bounded_agent(student_message, student_id=None, memory=None):
             memory,
         )
 
-        print("[TOOL RESULT]", json.dumps(result, indent=2))
+        print("[TOOL RESULT]", json.dumps(result, indent=2, default=str))
 
-        trace.append({
+        event = {
             "iteration": iteration,
             "event": "tool_call",
             "tool": name,
             "arguments": args,
             "result": result,
+            "provider": provider_name,
+            "latency_ms": latency_ms,
+        }
+        if dropped:
+            event["dropped_arguments"] = dropped
+        trace.append(event)
+
+        # Keep the model's tool request and the real application result in the
+        # neutral history so either provider can continue from here.
+        history.append({
+            "type": "tool_call",
+            "id": call_id,
+            "name": name,
+            "args": args,
+            "provider": provider_name,
+            "native": response.native,
         })
-
-        # Keep Gemini's tool request in the conversation history.
-        history.append(response.candidates[0].content)
-
-        # Return the real application result to Gemini.
-        history.append(
-            types.Content(
-                role="user",
-                parts=[
-                    types.Part.from_function_response(
-                        name=name,
-                        response=result,
-                    )
-                ],
-            )
-        )
+        history.append({
+            "type": "tool_result",
+            "id": call_id,
+            "name": name,
+            "result": result,
+        })
 
     # Hard stop: no fourth tool call is permitted.
     final_message = (
