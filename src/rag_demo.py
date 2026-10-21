@@ -1,4 +1,11 @@
+import hashlib
+import json
 import os
+import time
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
 import numpy as np
 
 from dotenv import load_dotenv
@@ -10,6 +17,24 @@ from groq import Groq
 
 from ingestion import load_documents
 
+
+trace = {
+    "schema_version": 1,
+    "run_id": uuid.uuid4().hex,
+    "started_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+    "model_calls": [],
+}
+
+
+def save_trace():
+    trace["duration_ms"] = round((time.perf_counter() - run_started) * 1000)
+    trace_path = Path(__file__).resolve().parents[1] / "docs" / "evidence" / "rag_demo_trace.json"
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    trace_path.write_text(json.dumps(trace, indent=2), encoding="utf-8")
+    print(f"Trace saved to: {trace_path}")
+
+
+run_started = time.perf_counter()
 
 
 # 1. Load environment variables
@@ -34,6 +59,7 @@ embedding_model = SentenceTransformer(
 # 2. Load controlled corpus
 
 
+index_started = time.perf_counter()
 chunks = load_documents()
 
 print(f"Number of chunks: {len(chunks)}")
@@ -55,6 +81,11 @@ document_embeddings = embedding_model.encode(
     convert_to_numpy=True,
     show_progress_bar=True
 )
+trace["indexing"] = {
+    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "document_chunks": len(chunks),
+    "duration_ms": round((time.perf_counter() - index_started) * 1000),
+}
 
 print(
     f"Embedding matrix shape: {document_embeddings.shape}"
@@ -71,6 +102,7 @@ student_question = "did i get an admission into the university?"
 # 5. Create embedding for the question
 
 
+retrieval_started = time.perf_counter()
 query_embedding = embedding_model.encode(
     student_question,
     convert_to_numpy=True
@@ -133,6 +165,21 @@ for result in similarities[:10]:
 
 
 top_chunks = similarities[:3]
+trace["retrieval"] = {
+    "method": "cosine_similarity",
+    "requested_top_k": 3,
+    "returned_chunks": len(top_chunks),
+    "duration_ms": round((time.perf_counter() - retrieval_started) * 1000),
+    "sources": [
+        {
+            "document_title": result["document_title"],
+            "source_id": result["source_id"],
+            "chunk_id": result["chunk_id"],
+            "similarity": round(float(result["score"]), 6),
+        }
+        for result in top_chunks
+    ],
+}
 
 print("\nRetrieved evidence:\n")
 
@@ -150,6 +197,7 @@ for result in top_chunks:
 # 10. Construct grounded context
 
 
+retrieved_context = ""
 if not top_chunks:
 
     print("Final answer:")
@@ -211,9 +259,16 @@ used for the answer.
 Respond clearly, briefly, and politely.
 """
 
+prompt_payload = json.dumps(
+    {"system_instruction": system_instruction},
+    sort_keys=True,
+    separators=(",", ":"),
+).encode("utf-8")
+trace["prompt_version"] = "sha256:" + hashlib.sha256(prompt_payload).hexdigest()[:16]
 
 try:
 
+    model_started = time.perf_counter()
     response = client.models.generate_content(
         model="gemini-3.1-pro-preview",
 
@@ -233,7 +288,17 @@ STUDENT QUESTION:
         )
     )
 
-    print("Generation model: Gemini 3.7 Flash")
+    trace["model_calls"].append({
+        "provider": "gemini",
+        "model": "gemini-3.1-pro-preview",
+        "latency_ms": round((time.perf_counter() - model_started) * 1000),
+        "outcome": "success",
+    })
+    trace["outcome"] = {
+        "status": "success",
+        "answer_characters": len(response.text or ""),
+    }
+    print("Generation model: Gemini 3.1 Pro Preview")
     print("Final answer:")
     print(response.text)
 
@@ -241,20 +306,28 @@ STUDENT QUESTION:
 except Exception as gemini_error:
 
     print("\nGemini generation failed.")
-    print(f"Reason: {gemini_error}")
+    print(f"Error type: {type(gemini_error).__name__}")
+    trace["model_calls"].append({
+        "provider": "gemini",
+        "model": "gemini-3.1-pro-preview",
+        "latency_ms": round((time.perf_counter() - model_started) * 1000),
+        "outcome": "error",
+        "error_type": type(gemini_error).__name__,
+    })
     print("\nFalling back to Groq...\n")
 
-    groq_response = groq_client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-
-        messages=[
-            {
-                "role": "system",
-                "content": system_instruction
-            },
-            {
-                "role": "user",
-                "content": f"""
+    groq_started = time.perf_counter()
+    try:
+        groq_response = groq_client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_instruction
+                },
+                {
+                    "role": "user",
+                    "content": f"""
 RETRIEVED UNIVERSITY EVIDENCE:
 
 {retrieved_context}
@@ -264,12 +337,37 @@ STUDENT QUESTION:
 
 {student_question}
 """
-            }
-        ]
-    )
+                }
+            ],
+        )
+    except Exception as groq_error:
+        trace["model_calls"].append({
+            "provider": "groq",
+            "model": "openai/gpt-oss-120b",
+            "latency_ms": round((time.perf_counter() - groq_started) * 1000),
+            "outcome": "error",
+            "error_type": type(groq_error).__name__,
+        })
+        trace["outcome"] = {
+            "status": "failed",
+            "error_type": type(groq_error).__name__,
+        }
+        save_trace()
+        raise
 
-    print("Generation model: Groq / Llama 3.3 70B")
+    answer = groq_response.choices[0].message.content or ""
+    trace["model_calls"].append({
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+        "latency_ms": round((time.perf_counter() - groq_started) * 1000),
+        "outcome": "success",
+    })
+    trace["outcome"] = {
+        "status": "success",
+        "answer_characters": len(answer),
+    }
+    print("Generation model: Groq / openai/gpt-oss-120b")
     print("Final answer:")
-    print(
-        groq_response.choices[0].message.content
-    )
+    print(answer)
+
+save_trace()

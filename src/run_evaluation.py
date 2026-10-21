@@ -172,7 +172,7 @@ def run_once(sc, mode, verbose=False):
             known_ids.add(prior["ticket_id"].lower())
 
     providers = build_providers(sc, mode)
-    result, crash = None, None
+    result, crash, observability = None, None, None
     started = time.perf_counter()
     try:
         with contextlib.ExitStack() as stack:
@@ -187,6 +187,7 @@ def run_once(sc, mode, verbose=False):
             )
     except Exception as exc:  # a crash is itself a finding
         crash = f"{type(exc).__name__}: {exc}"[:200]
+        observability = getattr(exc, "observability", None)
     latency_ms = round((time.perf_counter() - started) * 1000)
 
     trace = result["trace"] if result else []
@@ -208,6 +209,7 @@ def run_once(sc, mode, verbose=False):
             [e for e in trace if e.get("provider")]),
         "latency_ms": latency_ms,
         "iterations": result["state"]["iteration"] if result else None,
+        "observability": result.get("observability") if result else observability,
     }
 
 
@@ -382,6 +384,7 @@ def main():
     summary = {
         "label": args.label, "mode": args.mode, "repeats": args.repeats,
         "date": datetime.now(timezone.utc).isoformat(timespec="seconds"), "git_commit": commit,
+        "dataset_version": data.get("version"),
         "scenarios_run": len(scenarios), "runs": len(records), "runs_passed": passed,
         "pass_rate": round(passed / len(records), 3) if records else None,
         "by_category": {k: f"{v[0]}/{v[1]}" for k, v in sorted(by_cat.items())},
@@ -400,11 +403,14 @@ def main():
     with open(out_dir / f"{stem}.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["scenario", "category", "repeat", "passed", "failed_criteria", "latency_ms",
-                    "providers_used", "attempted_tools", "tickets", "phase", "response_start"])
+                    "providers_used", "attempted_tools", "tickets", "phase", "response_start",
+                    "prompt_version", "trace_events"])
         for r in records:
             w.writerow([r["scenario"], r["category"], r["repeat"], r["passed"], ";".join(r["failed_criteria"]),
                         r["latency_ms"], ";".join(r["providers_used"]), ";".join(r["attempted_tools"]),
-                        r["tickets"], r["phase"], r["response"][:120].replace("\n", " ")])
+                        r["tickets"], r["phase"], r["response"][:120].replace("\n", " "),
+                        (r.get("observability") or {}).get("prompt_version", ""),
+                        len((r.get("observability") or {}).get("events", []))])
 
     print("\n" + "=" * 70)
     print(f"SUMMARY  {args.label} / {args.mode}   commit {commit or 'n/a'}")

@@ -111,6 +111,52 @@ class FallbackBehaviourTests(unittest.TestCase):
         result = run([groq, gemini], "hi")
         self.assertNotIn("secret-token-123", json.dumps(result["trace"]))
 
+    def test_observability_trace_is_useful_and_excludes_student_content(self):
+        provider = FakeProvider("groq", [
+            call("get_case_status", {"case_id": "CASE-1045"}),
+            say("Private response for student STU-2026-001."),
+        ])
+        provider.model = "fake-model"
+        result = run([provider], "Private student message about CASE-1045.")
+        trace = result["observability"]
+        encoded = json.dumps(trace)
+
+        self.assertTrue(trace["prompt_version"].startswith("sha256:"))
+        self.assertEqual(trace["providers"], [
+            {"provider": "groq", "model": "fake-model"},
+        ])
+        self.assertEqual(trace["retrieval"]["case_status_lookups"], 1)
+        self.assertFalse(trace["retrieval"]["document_retrieval_used"])
+        self.assertEqual(trace["outcome"]["phase"], "responded")
+        self.assertTrue(any(event["event"] == "model_call" for event in trace["events"]))
+        tool_event = next(event for event in trace["events"] if event["event"] == "tool_call")
+        self.assertEqual(tool_event["input_fields"], ["case_id"])
+        self.assertTrue(tool_event["success"])
+        self.assertNotIn("CASE-1045", encoded)
+        self.assertNotIn("STU-2026-001", encoded)
+        self.assertNotIn("Private student message", encoded)
+        self.assertNotIn("Private response", encoded)
+
+    def test_tool_exception_is_attached_as_a_redacted_failure_trace(self):
+        provider = FakeProvider("groq", [
+            call("get_case_status", {"case_id": "CASE-1045"}),
+        ])
+        with patch("bounded_agent.get_case_status", side_effect=RuntimeError(
+            "private case details"
+        )):
+            with patch("builtins.print"):
+                with self.assertRaises(RuntimeError) as raised:
+                    agent.run_bounded_agent("Check CASE-1045.", providers=[provider])
+
+        trace = raised.exception.observability
+        encoded = json.dumps(trace)
+        tool_event = next(event for event in trace["events"] if event["event"] == "tool_call")
+        self.assertEqual(trace["outcome"]["phase"], "crashed")
+        self.assertEqual(tool_event["error_type"], "RuntimeError")
+        self.assertFalse(tool_event["success"])
+        self.assertNotIn("CASE-1045", encoded)
+        self.assertNotIn("private case details", encoded)
+
     def test_run_stays_on_fallback_after_switching(self):
         groq = FakeProvider("groq", [RuntimeError("down")])
         gemini = FakeProvider("gemini", [call("get_case_status", {"case_id": "CASE-1045"}),

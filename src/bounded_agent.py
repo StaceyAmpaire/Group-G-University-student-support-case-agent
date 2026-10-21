@@ -12,6 +12,7 @@ from google.genai import types
 from tools import get_case_status, create_support_ticket, CASE_OWNERS, TOOL_SCHEMAS
 from state import SessionState, Phase, advance
 from memory import MemoryStore, MemoryUnavailable
+from observability import begin_run, finish_run, trace_event
 
 
 load_dotenv()
@@ -615,16 +616,28 @@ def call_model(history, providers, start_index, trace, iteration):
         try:
             response = provider.generate(history)
         except Exception as exc:
-            trace.append({
-                "iteration": iteration,
-                "event": "provider_failure",
-                "provider": provider.name,
-                "error_type": type(exc).__name__,
-                "detail": str(exc)[:200] if isinstance(exc, ProviderError) else "",
-            })
+            trace_event(
+                trace,
+                "provider_failure",
+                iteration=iteration,
+                provider=provider.name,
+                model=getattr(provider, "model", None),
+                error_type=type(exc).__name__,
+                detail=str(exc)[:200] if isinstance(exc, ProviderError) else "",
+                latency_ms=round((time.perf_counter() - started) * 1000),
+            )
             print(f"[MODEL FAILED] {provider.name}: {type(exc).__name__}")
             continue
         latency_ms = round((time.perf_counter() - started) * 1000)
+        trace_event(
+            trace,
+            "model_call",
+            iteration=iteration,
+            provider=provider.name,
+            model=getattr(provider, "model", None),
+            latency_ms=latency_ms,
+            tool_calls_requested=len(response.tool_calls),
+        )
         print(f"[MODEL] {provider.name} ({latency_ms} ms)")
         return response, index, latency_ms
     raise AllProvidersFailed()
@@ -648,10 +661,11 @@ def run_bounded_agent(student_message, student_id=None, memory=None, providers=N
             state.memory_enabled = False
 
     trace = []
+    run_context = begin_run(SYSTEM_INSTRUCTION, TOOL_SCHEMAS, providers)
     history = [{"type": "user", "text": student_message}]
     provider_index = 0
 
-    print("\nStudent:", student_message)
+    print("\n[REQUEST RECEIVED]")
 
     for iteration in range(1, MAX_ITERATIONS + 1):
         state.iteration = iteration
@@ -662,19 +676,22 @@ def run_bounded_agent(student_message, student_id=None, memory=None, providers=N
                 history, providers, provider_index, trace, iteration
             )
         except AllProvidersFailed:
-            trace.append({
-                "iteration": iteration,
-                "event": "stop",
-                "reason": "All model providers failed.",
-            })
+            trace_event(
+                trace,
+                "stop",
+                iteration=iteration,
+                reason="All model providers failed.",
+            )
             print("[STOP] All model providers failed.")
             print("Agent:", SAFE_FAILURE_MESSAGE)
 
             state.transition(Phase.FAILED, "all model providers failed")
+            snapshot = state.snapshot()
             return {
                 "response": SAFE_FAILURE_MESSAGE,
                 "trace": trace,
-                "state": state.snapshot(),
+                "state": snapshot,
+                "observability": finish_run(run_context, trace, snapshot),
             }
 
         provider_name = providers[provider_index].name
@@ -685,23 +702,27 @@ def run_bounded_agent(student_message, student_id=None, memory=None, providers=N
                 "I could not produce a final response."
             )
 
-            trace.append({
-                "iteration": iteration,
-                "event": "stop",
-                "reason": "The model did not request another tool.",
-                "response": final_text,
-                "provider": provider_name,
-                "latency_ms": latency_ms,
-            })
+            trace_event(
+                trace,
+                "stop",
+                iteration=iteration,
+                reason="The model did not request another tool.",
+                response=final_text,
+                provider=provider_name,
+                model=getattr(providers[provider_index], "model", None),
+                latency_ms=latency_ms,
+            )
 
             print("[STOP] No further tool call requested.")
             print("Agent:", final_text)
 
             state.transition(Phase.RESPONDED, "model gave final answer")
+            snapshot = state.snapshot()
             return {
                 "response": final_text,
                 "trace": trace,
-                "state": state.snapshot(),
+                "state": snapshot,
+                "observability": finish_run(run_context, trace, snapshot),
             }
 
         # The system must act on one tool at a time.
@@ -711,21 +732,25 @@ def run_bounded_agent(student_message, student_id=None, memory=None, providers=N
                 "at once. Please retry the request."
             )
 
-            trace.append({
-                "iteration": iteration,
-                "event": "stop",
-                "reason": "Multiple simultaneous tool calls rejected.",
-                "provider": provider_name,
-            })
+            trace_event(
+                trace,
+                "stop",
+                iteration=iteration,
+                reason="Multiple simultaneous tool calls rejected.",
+                provider=provider_name,
+                model=getattr(providers[provider_index], "model", None),
+            )
 
             print("[STOP] Multiple tool calls rejected.")
             print("Agent:", final_text)
 
             state.transition(Phase.FAILED, "multiple simultaneous tool calls")
+            snapshot = state.snapshot()
             return {
                 "response": final_text,
                 "trace": trace,
-                "state": state.snapshot(),
+                "state": snapshot,
+                "observability": finish_run(run_context, trace, snapshot),
             }
 
         request = tool_calls[0]
@@ -734,19 +759,43 @@ def run_bounded_agent(student_message, student_id=None, memory=None, providers=N
         args, dropped = filter_arguments(name, dict(request.args or {}))
 
         print("[TOOL REQUEST]", name)
-        print("[ARGUMENTS]", json.dumps(args, indent=2, default=str))
+        print("[TOOL INPUT FIELDS]", sorted(args))
         if dropped:
             print("[DROPPED ARGUMENTS]", dropped)
 
-        result = execute_tool(
-            name,
-            args,
-            state,
-            student_message,
-            memory,
-        )
+        tool_started = time.perf_counter()
+        try:
+            result = execute_tool(
+                name,
+                args,
+                state,
+                student_message,
+                memory,
+            )
+        except Exception as exc:
+            event = {
+                "iteration": iteration,
+                "event": "tool_call",
+                "tool": name,
+                "arguments": args,
+                "result": None,
+                "provider": provider_name,
+                "model": getattr(providers[provider_index], "model", None),
+                "latency_ms": round((time.perf_counter() - tool_started) * 1000),
+                "error_type": type(exc).__name__,
+            }
+            if dropped:
+                event["dropped_arguments"] = dropped
+            trace_event(trace, **event)
+            failed_state = state.snapshot()
+            failed_state["phase"] = "crashed"
+            try:
+                setattr(exc, "observability", finish_run(run_context, trace, failed_state))
+            except (AttributeError, TypeError):
+                pass
+            raise
 
-        print("[TOOL RESULT]", json.dumps(result, indent=2, default=str))
+        print("[TOOL OUTCOME]", "success" if result.get("success") else "failed")
 
         event = {
             "iteration": iteration,
@@ -755,11 +804,12 @@ def run_bounded_agent(student_message, student_id=None, memory=None, providers=N
             "arguments": args,
             "result": result,
             "provider": provider_name,
-            "latency_ms": latency_ms,
+            "model": getattr(providers[provider_index], "model", None),
+            "latency_ms": round((time.perf_counter() - tool_started) * 1000),
         }
         if dropped:
             event["dropped_arguments"] = dropped
-        trace.append(event)
+        trace_event(trace, **event)
 
         # Keep the model's tool request and the real application result in the
         # neutral history so either provider can continue from here.
@@ -785,19 +835,18 @@ def run_bounded_agent(student_message, student_id=None, memory=None, providers=N
         "continue with a new request."
     )
 
-    trace.append({
-        "event": "stop",
-        "reason": "Maximum iteration limit reached.",
-    })
+    trace_event(trace, "stop", reason="Maximum iteration limit reached.")
 
     print("\n[STOP] Maximum iteration limit reached.")
     print("Agent:", final_message)
 
     state.transition(Phase.LIMIT_REACHED, "maximum iterations")
+    snapshot = state.snapshot()
     return {
         "response": final_message,
         "trace": trace,
-        "state": state.snapshot(),
+        "state": snapshot,
+        "observability": finish_run(run_context, trace, snapshot),
     }
 
 
@@ -809,7 +858,7 @@ def run_demo(title, message):
     result = run_bounded_agent(message)
 
     print("\nEXECUTION TRACE")
-    print(json.dumps(result["trace"], indent=2))
+    print(json.dumps(result["observability"], indent=2))
 
     return result
 
@@ -848,4 +897,3 @@ if __name__ == "__main__":
     )
 
     print(f"\nExecution traces saved to: {trace_file}")
-
