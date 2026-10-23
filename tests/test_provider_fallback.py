@@ -49,9 +49,12 @@ def say(text):
     return agent.ModelResponse(text=text, tool_calls=[])
 
 
-def run(providers, message=TICKET_MSG):
+SIGNED_IN = "STU-2026-001"   # Week 7: a request with no signed-in student is refused before any model call
+
+
+def run(providers, message=TICKET_MSG, student_id=SIGNED_IN):
     with patch("builtins.print"):
-        return agent.run_bounded_agent(message, providers=providers)
+        return agent.run_bounded_agent(message, student_id=student_id, providers=providers)
 
 
 class FallbackBehaviourTests(unittest.TestCase):
@@ -137,7 +140,9 @@ class FallbackBehaviourTests(unittest.TestCase):
         self.assertNotIn("Private student message", encoded)
         self.assertNotIn("Private response", encoded)
 
-    def test_tool_exception_is_attached_as_a_redacted_failure_trace(self):
+    def test_tool_exception_returns_a_safe_reply_with_a_redacted_failure_trace(self):
+        # Week 7 (TLF-02): a crashing tool no longer crashes the run. The student gets a
+        # safe reply and the redacted crash evidence is returned in result["observability"].
         provider = FakeProvider("groq", [
             call("get_case_status", {"case_id": "CASE-1045"}),
         ])
@@ -145,10 +150,13 @@ class FallbackBehaviourTests(unittest.TestCase):
             "private case details"
         )):
             with patch("builtins.print"):
-                with self.assertRaises(RuntimeError) as raised:
-                    agent.run_bounded_agent("Check CASE-1045.", providers=[provider])
+                result = agent.run_bounded_agent("Check CASE-1045.", student_id=SIGNED_IN,
+                                                 providers=[provider])
 
-        trace = raised.exception.observability
+        self.assertIn("couldn't complete that", result["response"])
+        self.assertNotIn("private case details", result["response"])
+        self.assertEqual(result["state"]["phase"], "failed")
+        trace = result["observability"]
         encoded = json.dumps(trace)
         tool_event = next(event for event in trace["events"] if event["event"] == "tool_call")
         self.assertEqual(trace["outcome"]["phase"], "crashed")

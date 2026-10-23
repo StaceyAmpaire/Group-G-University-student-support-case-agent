@@ -245,6 +245,7 @@ class BoundedAgentLoopTests(unittest.TestCase):
         with patch.object(agent, "client", fake_client), patch("builtins.print"):
             result = agent.run_bounded_agent(
                 "Check CASE-1045. Please create a follow-up support ticket for this issue.",
+                student_id="STU-2026-001",   # Week 7: unauthenticated requests are refused
                 providers=[agent.GeminiProvider()],
             )
 
@@ -265,7 +266,8 @@ class BoundedAgentLoopTests(unittest.TestCase):
             models=pytypes.SimpleNamespace(generate_content=Mock(return_value=repeating_response))
         )
         with patch.object(agent, "client", fake_client), patch("builtins.print"):
-            result = agent.run_bounded_agent("Check CASE-1045", providers=[agent.GeminiProvider()])
+            result = agent.run_bounded_agent("Check CASE-1045", student_id="STU-2026-001",
+                                             providers=[agent.GeminiProvider()])
 
         tool_events = [event for event in result["trace"] if event["event"] == "tool_call"]
         self.assertEqual(len(tool_events), agent.MAX_ITERATIONS)

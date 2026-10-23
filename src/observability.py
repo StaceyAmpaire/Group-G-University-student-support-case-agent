@@ -73,6 +73,15 @@ def _safe_event(event: dict) -> dict:
             safe["response_characters"] = len(event["response"])
     elif event.get("event") == "model_call":
         safe["tool_calls_requested"] = event.get("tool_calls_requested", 0)
+    elif event.get("event") == "guardrail":
+        for key in ("layer", "code", "codes", "flags"):
+            if key in event:
+                safe[key] = event[key]
+        if "findings" in event:
+            safe["findings"] = [
+                {"field": item.get("field"), "reason": item.get("reason)}
+                for item in event["findings"]
+            ]
     return safe
 
 
