@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "run_id": "a7d909bea5aa4d6382f9fcc90c5aa212",
+  "started_at": "2026-10-23T10:08:54.117+00:00",
+  "duration_ms": 0,
+  "prompt_version": "sha256:eb86454eefb86c99",
+  "providers": [
+    {
+      "provider": "groq",
+      "model": null
+    }
+  ],
+  "retrieval": {
+    "document_retrieval_used": false,
+    "case_status_lookups": 3
+  },
+  "outcome": {
+    "phase": "limit_reached",
+    "iteration": 3,
+    "transitions": [
+      {
+        "from": "intake",
+        "to": "case_verified"
+      },
+      {
+        "from": "case_verified",
+        "to": "case_verified"
+      },
+      {
+        "from": "case_verified",
+        "to": "case_verified"
+      },
+      {
+        "from": "case_verified",
+        "to": "limit_reached"
+      }
+    ]
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-23T10:08:54.117+00:00",
+      "event": "model_call",
+      "iteration": 1,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "tool_calls_requested": 1
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.117+00:00",
+      "event": "tool_call",
+      "iteration": 1,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "tool": "get_case_status",
+      "input_fields": [
+        "case_id"
+      ],
+      "dropped_argument_names": [],
+      "success": true,
+      "error_type": null,
+      "data_lookup": {
+        "kind": "case_status",
+        "matched": true
+      }
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.117+00:00",
+      "event": "model_call",
+      "iteration": 2,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "tool_calls_requested": 1
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.117+00:00",
+      "event": "tool_call",
+      "iteration": 2,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "tool": "get_case_status",
+      "input_fields": [
+        "case_id"
+      ],
+      "dropped_argument_names": [],
+      "success": true,
+      "error_type": null,
+      "data_lookup": {
+        "kind": "case_status",
+        "matched": true
+      }
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.117+00:00",
+      "event": "model_call",
+      "iteration": 3,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "tool_calls_requested": 1
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.117+00:00",
+      "event": "tool_call",
+      "iteration": 3,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "tool": "get_case_status",
+      "input_fields": [
+        "case_id"
+      ],
+      "dropped_argument_names": [],
+      "success": true,
+      "error_type": null,
+      "data_lookup": {
+        "kind": "case_status",
+        "matched": true
+      }
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.117+00:00",
+      "event": "stop",
+      "reason": "Maximum iteration limit reached."
+    }
+  ]
+}

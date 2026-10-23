@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "run_id": "ea1c90ecbcb84ad09a3110eca050e4e6",
+  "started_at": "2026-10-23T10:27:44.306+00:00",
+  "duration_ms": 2531,
+  "prompt_version": "sha256:eb86454eefb86c99",
+  "providers": [
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.7-flash"
+    }
+  ],
+  "retrieval": {
+    "document_retrieval_used": false,
+    "case_status_lookups": 0
+  },
+  "outcome": {
+    "phase": "failed",
+    "iteration": 1,
+    "transitions": [
+      {
+        "from": "intake",
+        "to": "failed"
+      }
+    ]
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-23T10:27:46.829+00:00",
+      "event": "provider_failure",
+      "iteration": 1,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 2522,
+      "error_type": "APIConnectionError"
+    },
+    {
+      "timestamp": "2026-10-23T10:27:46.837+00:00",
+      "event": "provider_failure",
+      "iteration": 1,
+      "provider": "gemini",
+      "model": "gemini-3.7-flash",
+      "latency_ms": 8,
+      "error_type": "ConnectError"
+    },
+    {
+      "timestamp": "2026-10-23T10:27:46.837+00:00",
+      "event": "stop",
+      "iteration": 1,
+      "reason": "All model providers failed."
+    }
+  ]
+}

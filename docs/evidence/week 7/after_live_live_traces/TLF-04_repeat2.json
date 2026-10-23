@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "run_id": "d6c89dafc730480eab67a8f4777c5e12",
+  "started_at": "2026-10-23T10:19:01.085+00:00",
+  "duration_ms": 483389,
+  "prompt_version": "sha256:eb86454eefb86c99",
+  "providers": [
+    {
+      "provider": "groq",
+      "model": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.7-flash"
+    }
+  ],
+  "retrieval": {
+    "document_retrieval_used": false,
+    "case_status_lookups": 1
+  },
+  "outcome": {
+    "phase": "responded",
+    "iteration": 3,
+    "transitions": [
+      {
+        "from": "intake",
+        "to": "case_verified"
+      },
+      {
+        "from": "case_verified",
+        "to": "ticket_created"
+      },
+      {
+        "from": "ticket_created",
+        "to": "responded"
+      }
+    ]
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-23T10:19:01.086+00:00",
+      "event": "provider_failure",
+      "iteration": 1,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "error_type": "RuntimeError"
+    },
+    {
+      "timestamp": "2026-10-23T10:20:24.205+00:00",
+      "event": "model_call",
+      "iteration": 1,
+      "provider": "gemini",
+      "model": "gemini-3.7-flash",
+      "latency_ms": 83113,
+      "tool_calls_requested": 1
+    },
+    {
+      "timestamp": "2026-10-23T10:20:24.205+00:00",
+      "event": "tool_call",
+      "iteration": 1,
+      "provider": "gemini",
+      "model": "gemini-3.7-flash",
+      "latency_ms": 0,
+      "tool": "get_case_status",
+      "input_fields": [
+        "case_id"
+      ],
+      "dropped_argument_names": [],
+      "success": true,
+      "error_type": null,
+      "data_lookup": {
+        "kind": "case_status",
+        "matched": true
+      }
+    },
+    {
+      "timestamp": "2026-10-23T10:22:10.809+00:00",
+      "event": "model_call",
+      "iteration": 2,
+      "provider": "gemini",
+      "model": "gemini-3.7-flash",
+      "latency_ms": 106596,
+      "tool_calls_requested": 1
+    },
+    {
+      "timestamp": "2026-10-23T10:22:10.809+00:00",
+      "event": "tool_call",
+      "iteration": 2,
+      "provider": "gemini",
+      "model": "gemini-3.7-flash",
+      "latency_ms": 0,
+      "tool": "create_support_ticket",
+      "input_fields": [
+        "case_id",
+        "category",
+        "description"
+      ],
+      "dropped_argument_names": [],
+      "success": true,
+      "error_type": null,
+      "data_lookup": null
+    },
+    {
+      "timestamp": "2026-10-23T10:27:04.509+00:00",
+      "event": "model_call",
+      "iteration": 3,
+      "provider": "gemini",
+      "model": "gemini-3.7-flash",
+      "latency_ms": 293679,
+      "tool_calls_requested": 0
+    },
+    {
+      "timestamp": "2026-10-23T10:27:04.509+00:00",
+      "event": "stop",
+      "iteration": 3,
+      "provider": "gemini",
+      "model": "gemini-3.7-flash",
+      "latency_ms": 293679,
+      "reason": "The model did not request another tool.",
+      "response_characters": 329
+    }
+  ]
+}

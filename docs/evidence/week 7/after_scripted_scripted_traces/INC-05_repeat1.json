@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "run_id": "97215d0a9f464a99a82a5befea335c59",
+  "started_at": "2026-10-23T10:08:54.077+00:00",
+  "duration_ms": 1,
+  "prompt_version": "sha256:eb86454eefb86c99",
+  "providers": [
+    {
+      "provider": "groq",
+      "model": null
+    }
+  ],
+  "retrieval": {
+    "document_retrieval_used": false,
+    "case_status_lookups": 0
+  },
+  "outcome": {
+    "phase": "responded",
+    "iteration": 1,
+    "transitions": [
+      {
+        "from": "intake",
+        "to": "responded"
+      }
+    ]
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-23T10:08:54.078+00:00",
+      "event": "model_call",
+      "iteration": 1,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "tool_calls_requested": 0
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.078+00:00",
+      "event": "guardrail",
+      "iteration": 1,
+      "layer": "output",
+      "codes": [
+        "ungrounded_fact"
+      ]
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.078+00:00",
+      "event": "stop",
+      "iteration": 1,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "reason": "The model did not request another tool.",
+      "response_characters": 68
+    }
+  ]
+}

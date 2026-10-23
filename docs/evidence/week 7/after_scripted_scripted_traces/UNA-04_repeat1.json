@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "run_id": "24017c7bc15544c4ad64546b6a4d1683",
+  "started_at": "2026-10-23T10:08:54.109+00:00",
+  "duration_ms": 0,
+  "prompt_version": "sha256:eb86454eefb86c99",
+  "providers": [
+    {
+      "provider": "groq",
+      "model": null
+    }
+  ],
+  "retrieval": {
+    "document_retrieval_used": false,
+    "case_status_lookups": 0
+  },
+  "outcome": {
+    "phase": "responded",
+    "iteration": 0,
+    "transitions": [
+      {
+        "from": "intake",
+        "to": "responded"
+      }
+    ]
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-23T10:08:54.109+00:00",
+      "event": "guardrail",
+      "layer": "input",
+      "code": "unauthenticated"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "run_id": "8c4da6de92c74c05820d6c9f6e16a4cc",
+  "started_at": "2026-10-23T10:08:54.114+00:00",
+  "duration_ms": 0,
+  "prompt_version": "sha256:eb86454eefb86c99",
+  "providers": [
+    {
+      "provider": "groq",
+      "model": null
+    }
+  ],
+  "retrieval": {
+    "document_retrieval_used": false,
+    "case_status_lookups": 0
+  },
+  "outcome": {
+    "phase": "failed",
+    "iteration": 1,
+    "transitions": [
+      {
+        "from": "intake",
+        "to": "failed"
+      }
+    ]
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-23T10:08:54.114+00:00",
+      "event": "model_call",
+      "iteration": 1,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "tool_calls_requested": 2
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.114+00:00",
+      "event": "stop",
+      "iteration": 1,
+      "provider": "groq",
+      "model": null,
+      "reason": "Multiple simultaneous tool calls rejected."
+    }
+  ]
+}

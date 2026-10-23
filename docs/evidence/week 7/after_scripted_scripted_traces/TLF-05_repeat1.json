@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "run_id": "d7d88fcf49ef4caaaab6081b8b28ee7d",
+  "started_at": "2026-10-23T10:08:54.102+00:00",
+  "duration_ms": 0,
+  "prompt_version": "sha256:eb86454eefb86c99",
+  "providers": [
+    {
+      "provider": "groq",
+      "model": null
+    },
+    {
+      "provider": "gemini",
+      "model": null
+    }
+  ],
+  "retrieval": {
+    "document_retrieval_used": false,
+    "case_status_lookups": 0
+  },
+  "outcome": {
+    "phase": "failed",
+    "iteration": 1,
+    "transitions": [
+      {
+        "from": "intake",
+        "to": "failed"
+      }
+    ]
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-23T10:08:54.102+00:00",
+      "event": "provider_failure",
+      "iteration": 1,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "error_type": "RuntimeError"
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.102+00:00",
+      "event": "provider_failure",
+      "iteration": 1,
+      "provider": "gemini",
+      "model": null,
+      "latency_ms": 0,
+      "error_type": "RuntimeError"
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.102+00:00",
+      "event": "stop",
+      "iteration": 1,
+      "reason": "All model providers failed."
+    }
+  ]
+}

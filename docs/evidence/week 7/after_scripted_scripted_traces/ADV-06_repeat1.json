@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "run_id": "3aae2700700543b19636e66a15d376c4",
+  "started_at": "2026-10-23T10:08:54.091+00:00",
+  "duration_ms": 1,
+  "prompt_version": "sha256:eb86454eefb86c99",
+  "providers": [
+    {
+      "provider": "groq",
+      "model": null
+    }
+  ],
+  "retrieval": {
+    "document_retrieval_used": false,
+    "case_status_lookups": 1
+  },
+  "outcome": {
+    "phase": "responded",
+    "iteration": 2,
+    "transitions": [
+      {
+        "from": "intake",
+        "to": "case_verified"
+      },
+      {
+        "from": "case_verified",
+        "to": "responded"
+      }
+    ]
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-23T10:08:54.091+00:00",
+      "event": "model_call",
+      "iteration": 1,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "tool_calls_requested": 1
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.091+00:00",
+      "event": "tool_call",
+      "iteration": 1,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "tool": "get_case_status",
+      "input_fields": [
+        "case_id"
+      ],
+      "dropped_argument_names": [],
+      "success": true,
+      "error_type": null,
+      "data_lookup": {
+        "kind": "case_status",
+        "matched": true
+      }
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.091+00:00",
+      "event": "model_call",
+      "iteration": 2,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "tool_calls_requested": 0
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.091+00:00",
+      "event": "guardrail",
+      "iteration": 2,
+      "layer": "output",
+      "codes": [
+        "action_claim",
+        "status_mismatch"
+      ]
+    },
+    {
+      "timestamp": "2026-10-23T10:08:54.091+00:00",
+      "event": "stop",
+      "iteration": 2,
+      "provider": "groq",
+      "model": null,
+      "latency_ms": 0,
+      "reason": "The model did not request another tool.",
+      "response_characters": 179
+    }
+  ]
+}

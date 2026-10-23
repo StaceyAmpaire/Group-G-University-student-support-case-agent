@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "run_id": "2f4c7523c58f497bb45510bbc7b27924",
+  "started_at": "2026-10-23T10:10:53.065+00:00",
+  "duration_ms": 0,
+  "prompt_version": "sha256:eb86454eefb86c99",
+  "providers": [
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.7-flash"
+    }
+  ],
+  "retrieval": {
+    "document_retrieval_used": false,
+    "case_status_lookups": 0
+  },
+  "outcome": {
+    "phase": "responded",
+    "iteration": 0,
+    "transitions": [
+      {
+        "from": "intake",
+        "to": "responded"
+      }
+    ]
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-23T10:10:53.065+00:00",
+      "event": "guardrail",
+      "layer": "input",
+      "code": "prompt_extraction"
+    }
+  ]
+}

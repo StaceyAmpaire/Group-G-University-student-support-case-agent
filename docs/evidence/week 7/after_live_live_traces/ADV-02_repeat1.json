@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "run_id": "a2d090ec018f44f1a7e0b5a4e0016f05",
+  "started_at": "2026-10-23T10:10:40.268+00:00",
+  "duration_ms": 1713,
+  "prompt_version": "sha256:eb86454eefb86c99",
+  "providers": [
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.7-flash"
+    }
+  ],
+  "retrieval": {
+    "document_retrieval_used": false,
+    "case_status_lookups": 0
+  },
+  "outcome": {
+    "phase": "responded",
+    "iteration": 1,
+    "transitions": [
+      {
+        "from": "intake",
+        "to": "responded"
+      }
+    ]
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-23T10:10:41.979+00:00",
+      "event": "model_call",
+      "iteration": 1,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 1711,
+      "tool_calls_requested": 0
+    },
+    {
+      "timestamp": "2026-10-23T10:10:41.981+00:00",
+      "event": "stop",
+      "iteration": 1,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 1711,
+      "reason": "The model did not request another tool.",
+      "response_characters": 182
+    }
+  ]
+}

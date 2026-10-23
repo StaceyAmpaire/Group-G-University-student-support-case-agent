@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "run_id": "c91ae2fcfdeb40a6a19ae857584bc314",
+  "started_at": "2026-10-23T10:08:18.324+00:00",
+  "duration_ms": 6027,
+  "prompt_version": "sha256:eb86454eefb86c99",
+  "providers": [
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.7-flash"
+    }
+  ],
+  "retrieval": {
+    "document_retrieval_used": false,
+    "case_status_lookups": 2
+  },
+  "outcome": {
+    "phase": "responded",
+    "iteration": 3,
+    "transitions": [
+      {
+        "from": "intake",
+        "to": "case_verified"
+      },
+      {
+        "from": "case_verified",
+        "to": "case_not_found"
+      },
+      {
+        "from": "case_not_found",
+        "to": "responded"
+      }
+    ]
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-23T10:08:20.046+00:00",
+      "event": "model_call",
+      "iteration": 1,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 1722,
+      "tool_calls_requested": 1
+    },
+    {
+      "timestamp": "2026-10-23T10:08:20.046+00:00",
+      "event": "tool_call",
+      "iteration": 1,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 0,
+      "tool": "get_case_status",
+      "input_fields": [
+        "case_id"
+      ],
+      "dropped_argument_names": [],
+      "success": true,
+      "error_type": null,
+      "data_lookup": {
+        "kind": "case_status",
+        "matched": true
+      }
+    },
+    {
+      "timestamp": "2026-10-23T10:08:22.036+00:00",
+      "event": "model_call",
+      "iteration": 2,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 1989,
+      "tool_calls_requested": 1
+    },
+    {
+      "timestamp": "2026-10-23T10:08:22.036+00:00",
+      "event": "tool_call",
+      "iteration": 2,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 0,
+      "tool": "get_case_status",
+      "input_fields": [
+        "case_id"
+      ],
+      "dropped_argument_names": [],
+      "success": false,
+      "error_type": null,
+      "data_lookup": {
+        "kind": "case_status",
+        "matched": false
+      }
+    },
+    {
+      "timestamp": "2026-10-23T10:08:24.350+00:00",
+      "event": "model_call",
+      "iteration": 3,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 2314,
+      "tool_calls_requested": 0
+    },
+    {
+      "timestamp": "2026-10-23T10:08:24.351+00:00",
+      "event": "stop",
+      "iteration": 3,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 2314,
+      "reason": "The model did not request another tool.",
+      "response_characters": 381
+    }
+  ]
+}

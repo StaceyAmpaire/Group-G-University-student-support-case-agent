@@ -34,6 +34,7 @@ import statistics
 import subprocess
 import sys
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -318,6 +319,7 @@ def save_run_traces(records, out_dir, stem):
             error_type = (record.get("crash") or "").split(":", 1)[0] or None
             trace = {
                 "schema_version": 1,
+                "run_id": uuid.uuid4().hex,
                 "trace_status": "unavailable",
                 "scenario": record["scenario"],
                 "repeat": record["repeat"],

@@ -71,6 +71,7 @@ class GuardrailTraceTests(unittest.TestCase):
 
         self.assertEqual(saved_success["run_id"], "safe-run-id")
         self.assertEqual(saved_unavailable["trace_status"], "unavailable")
+        self.assertTrue(saved_unavailable["run_id"])
         self.assertEqual(saved_unavailable["error_type"], "RuntimeError")
         self.assertNotIn("private error details", json.dumps(saved_unavailable))
 

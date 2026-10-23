@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "run_id": "0d948133c8a84ec3938a2baa90b8b45c",
+  "started_at": "2026-10-23T10:27:24.592+00:00",
+  "duration_ms": 3039,
+  "prompt_version": "sha256:eb86454eefb86c99",
+  "providers": [
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.7-flash"
+    }
+  ],
+  "retrieval": {
+    "document_retrieval_used": false,
+    "case_status_lookups": 1
+  },
+  "outcome": {
+    "phase": "responded",
+    "iteration": 3,
+    "transitions": [
+      {
+        "from": "intake",
+        "to": "case_verified"
+      },
+      {
+        "from": "case_verified",
+        "to": "responded"
+      }
+    ]
+  },
+  "events": [
+    {
+      "timestamp": "2026-10-23T10:27:25.816+00:00",
+      "event": "model_call",
+      "iteration": 1,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 1224,
+      "tool_calls_requested": 1
+    },
+    {
+      "timestamp": "2026-10-23T10:27:25.816+00:00",
+      "event": "tool_call",
+      "iteration": 1,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 0,
+      "tool": "get_case_status",
+      "input_fields": [
+        "case_id"
+      ],
+      "dropped_argument_names": [],
+      "success": true,
+      "error_type": null,
+      "data_lookup": {
+        "kind": "case_status",
+        "matched": true
+      }
+    },
+    {
+      "timestamp": "2026-10-23T10:27:26.410+00:00",
+      "event": "model_call",
+      "iteration": 2,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 594,
+      "tool_calls_requested": 1
+    },
+    {
+      "timestamp": "2026-10-23T10:27:26.411+00:00",
+      "event": "tool_call",
+      "iteration": 2,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 0,
+      "tool": "create_support_ticket",
+      "input_fields": [
+        "case_id",
+        "category",
+        "description"
+      ],
+      "dropped_argument_names": [],
+      "success": false,
+      "error_type": null,
+      "data_lookup": null
+    },
+    {
+      "timestamp": "2026-10-23T10:27:27.628+00:00",
+      "event": "model_call",
+      "iteration": 3,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 1217,
+      "tool_calls_requested": 0
+    },
+    {
+      "timestamp": "2026-10-23T10:27:27.631+00:00",
+      "event": "guardrail",
+      "iteration": 3,
+      "layer": "output",
+      "codes": [
+        "status_mismatch"
+      ]
+    },
+    {
+      "timestamp": "2026-10-23T10:27:27.631+00:00",
+      "event": "stop",
+      "iteration": 3,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "latency_ms": 1217,
+      "reason": "The model did not request another tool.",
+      "response_characters": 60
+    }
+  ]
+}
