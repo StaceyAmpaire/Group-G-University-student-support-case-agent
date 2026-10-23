@@ -1,10 +1,4 @@
 import os
-from dotenv import load_dotenv
-from google import genai
-
-load_dotenv()
-
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 SYSTEM_PROMPT_V1_1 = """
 ROLE:
@@ -58,18 +52,28 @@ What is the status of CASE-1070, which department handled it,
 and when was it submitted?
 """
 
-response = client.models.generate_content(
-    model="gemini-3.7-flash",
-    contents=f"""
+def main():
+    from dotenv import load_dotenv
+    from google import genai
+
+    load_dotenv()
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    response = client.models.generate_content(
+        model="gemini-3.7-flash",
+        contents=f"""
 APPLICATION CONTEXT:
 {test_10_context}
 
 STUDENT QUESTION:
 {test_10_question}
 """,
-    config={
-        "system_instruction": SYSTEM_PROMPT_V1_1
-    }
-)
+        config={
+            "system_instruction": SYSTEM_PROMPT_V1_1
+        }
+    )
 
-print(response.text)
+    print(response.text)
+
+
+if __name__ == "__main__":
+    main()

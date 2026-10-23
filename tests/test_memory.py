@@ -1,5 +1,6 @@
 """
-Tests for memory.py. Run from src/:   python -m unittest test_memory -v
+Tests for memory.py. Run from the repository root:
+    python -m unittest discover -s tests -p "test_memory.py"
 
 TeamApiTests copies the team's own MemoryStoreTests (tests/test_week6.py) and the exact
 calls bounded_agent.py, mcp_interface.py and demo_week6.py make, so a change to memory.py
@@ -9,12 +10,16 @@ that would break them fails here first.
 import json
 import os
 import sqlite3
+import sys
 import tempfile
 import threading
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 
 import memory
 from memory import (

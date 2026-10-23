@@ -2,15 +2,19 @@
 Offline tests for agent_loop.py. No network or API keys needed: the models are
 replaced by scripted fakes, so these tests check the loop's own rules.
 
-Run from src/:   python -m unittest test_agent_loop -v
+Run from the repository root:   python -m unittest discover -s tests -p "test_agent_loop.py"
 """
 
 import copy
 import logging
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 
 import agent_loop
 import tools

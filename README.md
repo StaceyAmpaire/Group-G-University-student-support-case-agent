@@ -43,6 +43,18 @@ GROQ_API_KEY=your_groq_api_key
 python src/rag_demo.py
 ```
 
+## Run the bounded support-case agent
+
+The main application demo uses `src/bounded_agent.py`, including the Week 7 guardrails:
+
+```powershell
+python src/main.py
+python src/main.py --extras
+python src/main.py --memory
+```
+
+The first two commands use the configured live model providers and require the API keys above. `--memory` runs the offline Week 6 memory/MCP demonstration. `src/agent_loop.py` preserves the Week 5 implementation for historical comparison and regression tests; it is not the current `main.py` runtime path.
+
 ## Week 7 evaluation
 
 Run the deterministic, offline scenario set without API calls:

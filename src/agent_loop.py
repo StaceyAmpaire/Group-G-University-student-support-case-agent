@@ -2,7 +2,9 @@
 agent_loop.py
 
 Bounded agent loop for the University Student-Support Case Agent.
-Implements the Week 5 Agent Task Contract.
+Preserves the original Week 5 Agent Task Contract implementation for
+historical comparison and regression tests. The current application entry
+point is main.py, which uses the Week 7-guarded bounded_agent.py workflow.
 
 Entry point:
     run_turn(message, conversation_id, student_id=None) -> dict
