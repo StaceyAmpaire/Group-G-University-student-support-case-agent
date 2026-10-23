@@ -42,3 +42,20 @@ GROQ_API_KEY=your_groq_api_key
 ```powershell
 python src/rag_demo.py
 ```
+
+## Week 7 evaluation
+
+Run the deterministic, offline scenario set without API calls:
+
+```powershell
+python -m unittest discover -s tests -p "test_*.py"
+python src/run_evaluation.py --mode scripted --label after_scripted
+```
+
+For a live provider evaluation, configure the API keys above and run:
+
+```powershell
+python src/run_evaluation.py --mode live --repeats 3 --label after_live
+```
+
+Live runs call the configured model providers and may incur API usage charges. Each evaluation writes summary JSON and CSV files plus one privacy-filtered trace JSON per run under `docs/evidence/<label>_<mode>_traces/`. The scenario results and traces contain synthetic scenario inputs; the observability summaries omit student names and message text.

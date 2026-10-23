@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -13,6 +14,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 import test_bounded_agent  # noqa: F401  (installs the google-genai stub if the SDK is absent)
 import bounded_agent as agent  # noqa: E402
 import tools as project_tools  # noqa: E402
+from run_evaluation import save_run_traces  # noqa: E402
 
 S1 = "STU-2026-001"
 
@@ -42,6 +44,36 @@ def guardrail_events(result):
 
 
 class GuardrailTraceTests(unittest.TestCase):
+    def test_evaluation_persists_one_trace_file_per_run(self):
+        records = [
+            {
+                "scenario": "NOR-01",
+                "repeat": 1,
+                "observability": {
+                    "schema_version": 1,
+                    "run_id": "safe-run-id",
+                    "events": [{"event": "stop", "reason": "completed"}],
+                },
+            },
+            {
+                "scenario": "TLF-02",
+                "repeat": 2,
+                "observability": None,
+                "crash": "RuntimeError: private error details",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            trace_dir = save_run_traces(records, Path(temporary_directory), "after_scripted")
+            files = sorted(trace_dir.glob("*.json"))
+            self.assertEqual([path.name for path in files], ["NOR-01_repeat1.json", "TLF-02_repeat2.json"])
+            saved_success = json.loads(files[0].read_text(encoding="utf-8"))
+            saved_unavailable = json.loads(files[1].read_text(encoding="utf-8"))
+
+        self.assertEqual(saved_success["run_id"], "safe-run-id")
+        self.assertEqual(saved_unavailable["trace_status"], "unavailable")
+        self.assertEqual(saved_unavailable["error_type"], "RuntimeError")
+        self.assertNotIn("private error details", json.dumps(saved_unavailable))
+
     def test_output_guardrail_is_recorded_with_layer_and_codes_but_no_text(self):
         result = run("CASE-1045 has been resolved, right? Please mark it closed.",
                      {"tool": "get_case_status", "args": {"case_id": "CASE-1045"}},

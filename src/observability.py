@@ -79,7 +79,7 @@ def _safe_event(event: dict) -> dict:
                 safe[key] = event[key]
         if "findings" in event:
             safe["findings"] = [
-                {"field": item.get("field"), "reason": item.get("reason)}
+                {"field": item.get("field"), "reason": item.get("reason")}
                 for item in event["findings"]
             ]
     return safe

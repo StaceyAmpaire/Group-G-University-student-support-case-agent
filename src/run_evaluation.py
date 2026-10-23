@@ -309,6 +309,25 @@ def pctl(values, p):
     return values[min(len(values) - 1, round(p / 100 * (len(values) - 1)))]
 
 
+def save_run_traces(records, out_dir, stem):
+    trace_dir = out_dir / f"{stem}_traces"
+    trace_dir.mkdir(parents=True, exist_ok=True)
+    for record in records:
+        trace = record.get("observability")
+        if trace is None:
+            error_type = (record.get("crash") or "").split(":", 1)[0] or None
+            trace = {
+                "schema_version": 1,
+                "trace_status": "unavailable",
+                "scenario": record["scenario"],
+                "repeat": record["repeat"],
+                "error_type": error_type,
+            }
+        trace_path = trace_dir / f"{record['scenario']}_repeat{record['repeat']}.json"
+        trace_path.write_text(json.dumps(trace, indent=2, ensure_ascii=False), encoding="utf-8")
+    return trace_dir
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mode", choices=["scripted", "live"], required=True)
@@ -411,6 +430,7 @@ def main():
                         r["tickets"], r["phase"], r["response"][:120].replace("\n", " "),
                         (r.get("observability") or {}).get("prompt_version", ""),
                         len((r.get("observability") or {}).get("events", []))])
+    trace_dir = save_run_traces(records, out_dir, stem)
 
     print("\n" + "=" * 70)
     print(f"SUMMARY  {args.label} / {args.mode}   commit {commit or 'n/a'}")
@@ -423,7 +443,11 @@ def main():
     if infra:
         print("NOTE: provider failures outside planned outage scenarios (rate limit / outage?). "
               "Re-run these before treating them as findings:", infra)
-    print(f"\nSaved: {out_dir / (stem + '.json')}\n       {out_dir / (stem + '.csv')}")
+    print(
+        f"\nSaved: {out_dir / (stem + '.json')}\n"
+        f"       {out_dir / (stem + '.csv')}\n"
+        f"       {trace_dir} ({len(records)} per-run traces)"
+    )
 
 
 if __name__ == "__main__":
