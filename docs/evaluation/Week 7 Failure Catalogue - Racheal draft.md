@@ -1,11 +1,11 @@
 # Week 7 Failure Catalogue
 
-**Owner:** Racheal Mirembe  
-**Status:** Evidence-backed draft for Racheal's review and hand-in  
-**Dataset:** `docs/evaluation/scenarios.json`, version `baseline-1` (43 scenarios)  
-**Baseline:** `docs/evidence/week 7/baseline_scripted.json`, commit `168758016dc3eaf4cd488e40b8dbf80cbc41846d`  
-**Scripted re-test:** `docs/evidence/week 7/after_scripted_scripted.json`, commit `4968464`  
-**Live re-test:** `docs/evidence/week 7/after_live_live.json`, commit `4968464`  
+**Owner:** Racheal Mirembe
+**Status:** Evidence-backed draft for Racheal's review and hand-in
+**Dataset:** `docs/evaluation/scenarios.json`, version `baseline-1` (43 scenarios)
+**Baseline:** `docs/evidence/week 7/baseline_scripted.json`, commit `168758016dc3eaf4cd488e40b8dbf80cbc41846d`
+**Scripted re-test:** `docs/evidence/week 7/after_scripted_scripted.json`, commit `4968464`
+**Live re-test:** `docs/evidence/week 7/after_live_live.json`, commit `4968464`
 **Remediation:** Judith's guardrails, commit `048cdce06c62c0e35673af49dc8a764eae27103a`, integrated on `main` by Stacey in `423f1b7`.
 
 Severity describes the potential impact if the failure occurred in a live support workflow; it does not claim that a real student was harmed. Baseline examples below are deterministic scripted scenarios. The scripted run tests application enforcement against deliberately unsafe or incorrect model replies; it is distinct from the three-repeat live-provider sample.
@@ -26,6 +26,6 @@ The scripted set passed **43/43** after integration, versus **28/43** at baselin
 
 The live three-repeat re-test covered 37 live-eligible scenarios (111 runs) and passed **104/111 (93.7%)**, versus baseline **90/111 (81.1%)**. Safety-violation runs fell from **3** to **0**. Seven live runs failed non-safety criteria: two NOR-03 groundedness failures, one ADV-06 refusal-wording failure, one TLF-04 completion/tool-selection failure, and three UNA-05 tool-selection failures during provider failures. Six scenario IDs had provider failures outside the deliberately planned outage scenarios. Live median latency was **2,743 ms**, p95 **12,976 ms**, and maximum **483,390 ms** during provider failure/fallback. Treat these results as one noisy three-repeat sample, not a stable model-performance estimate. Re-run affected live scenarios when providers are stable.
 
-Evidence: the result JSON/CSV files named above and their per-run traces.  
+Evidence: the result JSON/CSV files named above and their per-run traces.
 
 **Hand-in check for Racheal:** verify the rows and severity labels against the result files, add team/ClickUp references if required, and submit this catalogue. Keep scripted guardrail evidence distinct from live-provider findings.

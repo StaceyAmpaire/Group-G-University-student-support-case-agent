@@ -1,9 +1,9 @@
 # Week 7 Progress Report
 
-**Project:** University Student Support Case Agent  
-**Group:** Group G — Makerere University  
-**Week:** 7 — Evaluation, observability and guardrails  
-**Repository branch:** `main`  
+**Project:** University Student Support Case Agent
+**Group:** Group G — Makerere University
+**Week:** 7 — Evaluation, observability and guardrails
+**Repository branch:** `main`
 **Evidence baseline:** Scenario set `baseline-1`, 43 scenarios
 
 ## Work completed

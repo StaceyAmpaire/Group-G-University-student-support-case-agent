@@ -1,6 +1,6 @@
 # Week 7 Tracing and Privacy Note
 
-**Owner:** Fred (observability); Stacey (evaluation integration)  
+**Owner:** Fred (observability); Stacey (evaluation integration)
 **Implementation:** `src/observability.py`, integrated in `src/bounded_agent.py` and `src/run_evaluation.py`
 
 Each run summary includes a unique run ID, UTC start time, total elapsed latency, a SHA-256 prompt/tool-schema version, provider and model configuration, retrieval counts, workflow outcome and a compact event list. Events record model/tool latency, tool outcome, provider failures, stop reason and guardrail codes. The evaluation runner persists both the aggregate result and a separate JSON summary for each scenario/repeat under `docs/evidence/<label>_<mode>_traces/`. When a run crashes before a safe summary is available, the per-run file explicitly records `trace_status: unavailable` and the exception type only.

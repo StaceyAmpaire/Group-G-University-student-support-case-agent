@@ -1,8 +1,8 @@
 # Week 7 Guardrail Evidence
 
-**Owner:** Judith  
-**Implementation:** `src/guardrails.py`, merged into `src/bounded_agent.py`  
-**Tests:** `tests/test_guardrails.py`, `tests/test_guardrail_trace.py`  
+**Owner:** Judith
+**Implementation:** `src/guardrails.py`, merged into `src/bounded_agent.py`
+**Tests:** `tests/test_guardrails.py`, `tests/test_guardrail_trace.py`
 **Scenario set:** `docs/evaluation/scenarios.json` (`baseline-1`, 43 scenarios)
 
 | Guardrail | Implementation | Test evidence | Representative scenario(s) |
